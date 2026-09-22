@@ -508,15 +508,30 @@ function loadGHConfig(){
 
 async function tryAutoLoadFromGH(){
   if(!GH.user || !GH.repo) return;
-  const url = `https://raw.githubusercontent.com/${GH.user}/${GH.repo}/${GH.branch||'main'}/dashboard-data.json?t=${Date.now()}`;
+  // Try GitHub API first (bypasses CDN cache), fallback to raw URL
+  const apiUrl=`https://api.github.com/repos/${GH.user}/${GH.repo}/contents/dashboard-data.json`;
+  const rawUrl=`https://raw.githubusercontent.com/${GH.user}/${GH.repo}/${GH.branch||'main'}/dashboard-data.json`;
   try{
-    showToast('Loading data from GitHub…','');
-    const r = await fetch(url);
-    if(!r.ok) return;
+    setUploadStatus('Loading data from GitHub…',30);
+    document.getElementById('upload-progress').style.display='';
+    // Use API to get latest content (not cached)
+    const headers={'Accept':'application/vnd.github.v3.raw'};
+    if(GH.pat) headers['Authorization']='token '+GH.pat;
+    let r = await fetch(apiUrl,{headers});
+    // Fallback to raw if API fails
+    if(!r.ok) r = await fetch(rawUrl+'?t='+Date.now());
+    if(!r.ok){setUploadStatus('',100);return;}
     const data = await r.json();
+    if(!data.sellerMap||Object.keys(data.sellerMap).length===0){
+      setUploadStatus('',100);
+      return; // empty data, show upload screen
+    }
+    setUploadStatus('Building dashboard…',80);
     ingestJSON(data);
     showToast('✅ Dashboard loaded from GitHub','ok');
-  }catch(e){}
+  }catch(e){
+    setUploadStatus('',100);
+  }
 }
 
 // ══════════════════════════════════════════
@@ -1139,18 +1154,32 @@ async function saveGHConfig(){
 
 async function publishToGH(){
   if(!GH.pat){showToast('PAT required to publish','err');return;}
-  const payload=buildExportPayload();
-  const content=btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
-  const url=`https://api.github.com/repos/${GH.user}/${GH.repo}/contents/dashboard-data.json`;
-  const headers={'Authorization':'token '+GH.pat,'Content-Type':'application/json'};
-  let sha;
-  try{const ex=await fetch(url,{headers});if(ex.ok){const d=await ex.json();sha=d.sha;}}catch(e){}
-  const body={message:'Update pickup data '+new Date().toISOString(),content,branch:GH.branch||'main'};
-  if(sha) body.sha=sha;
   showToast('Publishing…','');
-  const r=await fetch(url,{method:'PUT',headers,body:JSON.stringify(body)});
-  if(r.ok) showToast('✅ Published! Everyone sees updates on refresh.','ok');
-  else{const err=await r.json();showToast('❌ '+(err.message||'Failed'),'err');}
+  try{
+    const payload=buildExportPayload();
+    const jsonStr=JSON.stringify(payload);
+    // Check size
+    const kb=jsonStr.length/1024;
+    if(kb>90000){showToast('Data too large to publish (>90MB). Try filtering first.','err');return;}
+    const content=btoa(unescape(encodeURIComponent(jsonStr)));
+    const url=`https://api.github.com/repos/${GH.user}/${GH.repo}/contents/dashboard-data.json`;
+    const headers={'Authorization':'token '+GH.pat,'Content-Type':'application/json'};
+    // Always get fresh sha
+    let sha;
+    try{
+      const ex=await fetch(url,{headers,cache:'no-store'});
+      if(ex.ok){const d=await ex.json();sha=d.sha;}
+    }catch(e){}
+    const body={message:'Update pickup data '+new Date().toISOString(),content,branch:GH.branch||'main'};
+    if(sha) body.sha=sha;
+    const r=await fetch(url,{method:'PUT',headers,body:JSON.stringify(body)});
+    if(r.ok){
+      showToast('✅ Published! Everyone sees updates on refresh.','ok');
+    } else {
+      const err=await r.json();
+      showToast('❌ '+(err.message||'Publish failed'),'err');
+    }
+  }catch(e){showToast('❌ Error: '+e.message,'err');}
 }
 
 // ══════════════════════════════════════════
