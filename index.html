@@ -1,0 +1,2241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Pickup Scorecard — Breach Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#f0f2f7;--surface:#ffffff;--surface2:#f5f6fa;--border:#dde1ee;--text:#1a1d2e;--muted:#6b7280;--accent:#4f7cf7;--accent2:#7c4fef;--red:#e53935;--orange:#f57c00;--green:#2e7d32;--yellow:#f9a825;--radius:10px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:system-ui,sans-serif;font-size:14px;min-height:100vh}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:100}
+header h1{font-size:15px;font-weight:600;flex:1}header h1 span{color:var(--accent)}
+.btn{padding:6px 13px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:5px;transition:background .15s;font-weight:500}
+.btn:hover{background:var(--border)}.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}.btn.primary:hover{background:#3d68e0}
+.gh-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block}
+.gh-dot.ok{background:var(--green)}.gh-dot.err{background:var(--red)}
+.shell{display:flex;min-height:calc(100vh - 49px)}
+nav{width:190px;background:var(--surface);border-right:1px solid var(--border);padding:12px 0;flex-shrink:0}
+nav a{display:flex;align-items:center;gap:8px;padding:9px 18px;color:var(--muted);font-size:13px;font-weight:500;cursor:pointer;border-left:3px solid transparent;transition:all .15s}
+nav a:hover{color:var(--text);background:var(--surface2)}
+nav a.active{color:var(--accent);border-left-color:var(--accent);background:rgba(79,124,247,.08)}
+main{flex:1;padding:20px;overflow-x:hidden}
+
+/* Upload */
+#upload-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:48px 24px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s}
+#upload-zone:hover,#upload-zone.drag{border-color:var(--accent);background:rgba(79,124,247,.05)}
+#upload-zone .uz-icon{font-size:36px;margin-bottom:10px}
+#upload-zone h2{font-size:17px;margin-bottom:6px}
+#upload-zone p{color:var(--muted);font-size:12px;margin-bottom:14px}
+#file-input{display:none}
+.progress-bar{height:4px;background:var(--border);border-radius:99px;overflow:hidden;margin-top:10px;max-width:280px;margin-left:auto;margin-right:auto}
+.progress-fill{height:100%;background:var(--accent);transition:width .3s}
+
+/* Global filters bar */
+.global-filters{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.global-filters .gf-label{color:var(--muted);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-right:4px}
+
+/* KPI summary strip */
+.summary-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 14px}
+.kpi .label{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.kpi .value{font-size:22px;font-weight:700;letter-spacing:-.02em}
+.kpi .sub{color:var(--muted);font-size:10px;margin-top:3px}
+.kpi .units-sub{color:var(--muted);font-size:11px;margin-top:2px;font-weight:500}
+.kpi.red .value{color:var(--red)}.kpi.orange .value{color:var(--orange)}.kpi.green .value{color:var(--green)}.kpi.blue .value{color:var(--accent)}
+
+/* Tab content */
+.tab-content{display:none}.tab-content.active{display:block}
+
+/* Filter bar per tab */
+.filter-bar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+select,input[type=text]{background:var(--surface);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:6px 10px;font-size:12px;outline:none}
+select:focus,input:focus{border-color:var(--accent)}
+.filter-bar .spacer{flex:1}
+
+/* Multi-select dropdown */
+.ms-wrap{position:relative;display:inline-block}
+.ms-trigger{background:var(--surface);border:1px solid var(--border);border-radius:7px;color:var(--text);padding:6px 28px 6px 10px;font-size:12px;cursor:pointer;min-width:120px;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;user-select:none;display:inline-flex;align-items:center;gap:4px}
+.ms-trigger:after{content:'▾';position:absolute;right:8px;font-size:10px;color:var(--muted)}
+.ms-trigger.active{border-color:var(--accent)}
+.ms-dropdown{position:absolute;top:calc(100% + 4px);left:0;background:var(--surface2);border:1px solid var(--border);border-radius:9px;min-width:200px;max-width:260px;z-index:150;box-shadow:0 8px 24px rgba(0,0,0,.12);display:none;flex-direction:column;max-height:280px}
+.ms-dropdown.open{display:flex}
+.ms-search{padding:8px 10px;border-bottom:1px solid var(--border)}
+.ms-search input{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-size:12px;outline:none}
+.ms-search input:focus{border-color:var(--accent)}
+.ms-actions{display:flex;gap:6px;padding:6px 10px;border-bottom:1px solid var(--border)}
+.ms-actions span{font-size:11px;color:var(--accent);cursor:pointer}
+.ms-actions span:hover{text-decoration:underline}
+.ms-list{overflow-y:auto;flex:1}
+.ms-item{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:12px;transition:background .1s}
+.ms-item:hover{background:var(--border)}
+.ms-item input[type=checkbox]{width:13px;height:13px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
+.ms-item label{cursor:pointer;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ms-badge{display:inline-block;background:var(--accent);color:#fff;border-radius:99px;font-size:10px;font-weight:700;padding:0 5px;margin-left:2px;line-height:16px}
+
+/* Tables */
+.table-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border);max-height:60vh;overflow-y:auto}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead th{background:var(--surface2);color:var(--muted);font-weight:600;padding:9px 11px;text-align:left;white-space:nowrap;position:sticky;top:0;z-index:2;cursor:pointer;border-bottom:1px solid var(--border)}
+thead th:hover{color:var(--accent)}
+thead th[onclick]:after{content:' ⇅';font-size:9px;opacity:.4}
+thead th.sorted-asc:after{content:' ▲';opacity:1;color:var(--accent)}
+thead th.sorted-desc:after{content:' ▼';opacity:1;color:var(--accent)}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--surface2)}
+td{padding:8px 11px;white-space:nowrap}
+
+/* Badges */
+.badge{display:inline-block;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:600}
+.badge.red{background:rgba(247,86,79,.15);color:var(--red)}.badge.orange{background:rgba(247,159,79,.15);color:var(--orange)}
+.badge.green{background:rgba(79,186,124,.15);color:var(--green)}.badge.blue{background:rgba(79,124,247,.15);color:var(--accent)}
+.badge.purple{background:rgba(124,79,239,.15);color:var(--accent2)}.badge.grey{background:rgba(123,130,160,.15);color:var(--muted)}
+
+/* Charts */
+.chart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:14px;margin-bottom:16px}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.chart-card h3{font-size:11px;font-weight:600;color:var(--muted);margin-bottom:12px;text-transform:uppercase;letter-spacing:.04em}
+.chart-wrap{position:relative;height:240px}
+
+/* Section head */
+.section-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.section-head h2{font-size:14px;font-weight:600}
+.row-count{color:var(--muted);font-size:11px}
+
+/* Pct bar */
+.pct-bar{display:inline-block;width:52px;height:5px;background:var(--border);border-radius:3px;vertical-align:middle;position:relative;overflow:hidden;margin-left:4px}
+.pct-fill{position:absolute;left:0;top:0;bottom:0;background:var(--accent)}
+.pct-fill.high{background:var(--red)}.pct-fill.mid{background:var(--orange)}
+
+/* BU Summary table */
+.bu-summary{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px;overflow:hidden}
+.bu-summary-head{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border)}
+.bu-summary-head h3{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;flex:1}
+.bu-table{width:100%;border-collapse:collapse;font-size:12px}
+.bu-table th{background:var(--surface2);color:var(--muted);font-weight:600;padding:8px 12px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--border)}
+.bu-table td{padding:7px 12px;border-bottom:1px solid var(--border);white-space:nowrap}
+.bu-table tr:last-child>td{border-bottom:none}
+.bu-table tbody tr:hover>td{background:var(--surface2)}
+.bu-expand-btn{background:none;border:none;color:var(--accent);cursor:pointer;font-size:11px;padding:2px 6px;border-radius:4px;transition:background .1s}
+.bu-expand-btn:hover{background:rgba(79,124,247,.12)}
+.sc-rows{display:none}
+.sc-rows.open{display:table-row-group}
+.sc-row>td{background:rgba(79,124,247,.04)!important;padding:6px 12px 6px 30px;font-size:11px;color:var(--text)}
+.sc-select{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:4px 8px;font-size:11px;outline:none;cursor:pointer}
+.sc-select:focus{border-color:var(--accent)}
+
+/* GitHub modal */
+#gh-panel{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:200;display:none;align-items:center;justify-content:center}
+#gh-panel.open{display:flex}
+.gh-modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:420px;max-width:95vw}
+.gh-modal h2{font-size:15px;margin-bottom:14px}
+.form-row{margin-bottom:12px}.form-row label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}
+.form-row input{width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--border);border-radius:7px;color:var(--text);font-size:13px;outline:none}
+.form-row input:focus{border-color:var(--accent)}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
+
+/* Toast */
+#toast{position:fixed;bottom:20px;right:20px;background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:10px 16px;font-size:12px;display:none;z-index:300}
+#toast.ok{border-color:var(--green);color:var(--green)}#toast.err{border-color:var(--red);color:var(--red)}
+
+.empty{text-align:center;padding:40px;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📦 <span>Pickup Scorecard</span> — Breach Dashboard</h1>
+  <div style="display:flex;gap:8px;align-items:center">
+    <span id="gh-status-dot" class="gh-dot" title="GitHub not configured"></span>
+    <button class="btn" onclick="openGHPanel()">⚙ GitHub Sync</button>
+    <button class="btn" id="btn-publish" onclick="publishToGH()" style="display:none">📤 Publish</button>
+    <button class="btn" id="btn-export" onclick="exportJSON()" style="display:none">⬇ Export JSON</button>
+    <button class="btn" id="btn-reset" onclick="resetDashboard()" style="display:none">↩ Upload New</button>
+    <label class="btn primary" for="file-input" id="btn-upload-hdr" style="display:none">📂 Upload CSV</label>
+    <input type="file" id="file-input" accept=".csv,.json" onchange="handleFileInput(this)">
+  </div>
+</header>
+
+<div class="shell">
+  <nav id="sidebar" style="display:none">
+    <a class="active" data-tab="overview" onclick="switchTab('overview')">📊 Overview</a>
+    <a data-tab="sellers" onclick="switchTab('sellers')">🏪 Seller Analysis</a>
+    <a data-tab="ph" onclick="switchTab('ph')">🏢 PH Analysis</a>
+    <a data-tab="daily" onclick="switchTab('daily')">📅 Daily Trend</a>
+    <a data-tab="critical" onclick="switchTab('critical')">🚨 Critical Sellers</a>
+    <a data-tab="cluster" onclick="switchTab('cluster')">📦 Cluster Sellers</a>
+    <a data-tab="ekart" onclick="switchTab('ekart')">⚡ Low DRR Pickup Issue</a>
+  </nav>
+
+  <main>
+    <!-- UPLOAD SCREEN -->
+    <div id="upload-screen">
+      <div id="upload-zone" ondragover="event.preventDefault();this.classList.add('drag')" ondragleave="this.classList.remove('drag')" ondrop="handleDrop(event)" onclick="document.getElementById('file-input').click()">
+        <div class="uz-icon">📂</div>
+        <h2>Upload Pickup Scorecard CSV</h2>
+        <p>Drag & drop your Large-NFBF Pickup Score Card CSV, or click to browse<br>You can also load an exported JSON to share with teammates</p>
+        <button class="btn primary" style="pointer-events:none">Choose file</button>
+        <div class="progress-bar" id="upload-progress" style="display:none"><div class="progress-fill" id="upload-progress-fill" style="width:0%"></div></div>
+        <p id="upload-status" style="margin-top:10px;color:var(--accent);font-size:12px"></p>
+      </div>
+      <div style="margin-top:12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-size:11px;color:var(--muted)">
+        <strong style="color:var(--text)">Required columns:</strong> dispatch_expected_date · seller_id · large_ph_name · Sum of units · DBD Breach · Embargo · Cluster Seller · issue_type · Low_DRR_Status · Incubation · Week num
+      </div>
+    </div>
+
+    <!-- DASHBOARD -->
+    <div id="dashboard" style="display:none">
+
+      <!-- GLOBAL FILTERS (shown on all tabs) -->
+      <div class="global-filters" id="global-filters">
+        <span class="gf-label">🔍 Filters</span>
+        <div class="ms-wrap" id="ms-week-wrap"></div>
+        <div class="ms-wrap" id="ms-month-wrap"></div>
+        <div class="ms-wrap" id="ms-date-wrap"></div>
+        <div class="ms-wrap" id="ms-ph-wrap"></div>
+        <div class="ms-wrap" id="ms-bu-wrap"></div>
+        <div class="ms-wrap" id="ms-owner-wrap"></div>
+        <div class="ms-wrap" id="ms-breach-type-wrap"></div>
+        <button class="btn" onclick="clearGlobalFilters()" style="margin-left:4px">✕ Clear</button>
+        <span style="flex:1"></span>
+        <span id="gf-row-count" style="color:var(--muted);font-size:11px"></span>
+      </div>
+
+      <!-- OVERVIEW TAB -->
+      <div id="tab-overview" class="tab-content active">
+        <div class="summary-strip" id="ov-summary">
+          <div class="kpi blue"><div class="label">Total Sellers</div><div class="value" id="ov-sellers">—</div><div class="sub" id="ov-bsellers-pct"></div></div>
+          <div class="kpi red"><div class="label">Breached Sellers %</div><div class="value" id="ov-bsellers-pct2">—</div><div class="units-sub" id="ov-bsellers">—</div></div>
+          <div class="kpi"><div class="label">Base Units</div><div class="value" id="ov-units">—</div><div class="sub" style="color:var(--muted);font-size:9px">excl. cancellations</div></div>
+          <div class="kpi red"><div class="label">Breach %</div><div class="value" id="ov-bpct">—</div><div class="units-sub" id="ov-bunits">—</div></div>
+          <div class="kpi green"><div class="label">Cluster Sellers</div><div class="value" id="ov-cluster">—</div></div>
+          <div class="kpi purple" style="--purple:#7c4fef"><div class="label">RBND %</div><div class="value" id="ov-rbnd-pct" style="color:var(--accent2)">—</div><div class="units-sub" id="ov-rbnd">—</div></div>
+          <div class="kpi orange"><div class="label">Reattempt %</div><div class="value" id="ov-reattempt-pct">—</div><div class="units-sub" id="ov-reattempt">—</div></div>
+          <div class="kpi blue"><div class="label">Delay %</div><div class="value" id="ov-delay-pct">—</div><div class="units-sub" id="ov-delay">—</div></div>
+        </div>
+        <div class="bu-summary">
+          <div class="bu-summary-head">
+            <h3>📦 BU Level Breach Summary</h3>
+            <select class="sc-select" id="ov-sc-filter" onchange="renderBUSummary('ov-bu-tbody','ov-sc-filter')"><option value="">All SCs</option></select>
+          </div>
+          <table class="bu-table"><thead><tr>
+            <th></th><th>Business Unit</th><th>Base Units</th><th>Breach Units</th>
+            <th>Breach %</th><th>RBND Units</th><th>Reattempt Units</th><th>Delay Units</th>
+            <th>Sellers</th><th>Breach Sellers</th><th>Breach Seller %</th>
+          </tr></thead><tbody id="ov-bu-tbody"></tbody></table>
+        </div>
+        <div class="chart-grid">
+          <div class="chart-card"><h3>Top 15 PHs by Breach Units</h3><div class="chart-wrap"><canvas id="chart-ph"></canvas></div></div>
+          <div class="chart-card"><h3>Breach by Type</h3><div class="chart-wrap"><canvas id="chart-type"></canvas></div></div>
+        </div>
+        <div class="chart-card"><h3>Top 15 Breached Sellers</h3><div class="chart-wrap"><canvas id="chart-sellers"></canvas></div></div>
+      </div>
+
+      <!-- SELLER ANALYSIS TAB -->
+      <div id="tab-sellers" class="tab-content">
+        <div class="summary-strip">
+          <div class="kpi blue"><div class="label">Sellers (filtered)</div><div class="value" id="sel-sum-sellers">—</div></div>
+          <div class="kpi red"><div class="label">Breach Sellers %</div><div class="value" id="sel-sum-bsellers-pct">—</div><div class="units-sub" id="sel-sum-bsellers">—</div></div>
+          <div class="kpi"><div class="label">Base Units</div><div class="value" id="sel-sum-units">—</div></div>
+          <div class="kpi red"><div class="label">Breach %</div><div class="value" id="sel-sum-bpct">—</div><div class="units-sub" id="sel-sum-bunits">—</div></div>
+          <div class="kpi"><div class="label">Avg Breach Days</div><div class="value" id="sel-sum-avgdays">—</div></div>
+        </div>
+        <div class="bu-summary">
+          <div class="bu-summary-head">
+            <h3>📦 BU Level Breach Summary (filtered sellers)</h3>
+            <select class="sc-select" id="sel-sc-filter" onchange="renderBUSummary('sel-bu-tbody','sel-sc-filter')"><option value="">All SCs</option></select>
+          </div>
+          <table class="bu-table"><thead><tr>
+            <th></th><th>Business Unit</th><th>Base Units</th><th>Breach Units</th>
+            <th>Breach %</th><th>RBND Units</th><th>Reattempt Units</th><th>Delay Units</th>
+            <th>Sellers</th><th>Breach Sellers</th><th>Breach Seller %</th>
+          </tr></thead><tbody id="sel-bu-tbody"></tbody></table>
+        </div>
+        <div class="filter-bar">
+          <input type="text" id="sel-search" placeholder="Search seller ID / name…" oninput="renderSellers()" style="min-width:180px">
+          <div class="ms-wrap" id="ms-sel-seg-wrap"></div>
+          <div class="ms-wrap" id="ms-sel-sev-wrap"></div>
+          <div class="ms-wrap" id="ms-sel-issue-wrap"></div>
+          <select id="sel-breach-days" onchange="renderSellers()" style="font-size:12px">
+            <option value="0">Breach days ≥ 1</option><option value="5">≥ 5</option>
+            <option value="10">≥ 10</option><option value="15">≥ 15</option><option value="20">≥ 20</option>
+          </select>
+          <span class="spacer"></span>
+          <select id="sel-sort" onchange="renderSellers()" style="font-size:12px">
+            <option value="breach_units">Sort: Breach Units</option><option value="breach_pct">Sort: Breach %</option>
+            <option value="breach_days">Sort: Breach Days</option><option value="total_units">Sort: Total Units</option>
+          </select>
+          <button class="btn" onclick="downloadCSV('sellers')">⬇ CSV</button>
+        </div>
+        <div class="section-head"><span class="row-count" id="sel-count"></span></div>
+        <div class="table-wrap">
+          <table id="tbl-sellers"><thead><tr>
+            <th onclick="sortTable('sellers','sid')">Seller ID</th>
+            <th onclick="sortTable('sellers','name')">Seller Name</th>
+            <th onclick="sortTable('sellers','bu')">BU</th>
+            <th onclick="sortTable('sellers','sc')">SC</th>
+            <th onclick="sortTable('sellers','owner')">Owner</th>
+            <th onclick="sortTable('sellers','am')">AM</th>
+            <th onclick="sortTable('sellers','ph')">PH</th>
+            <th onclick="sortTable('sellers','total_units')">Base Units</th>
+            <th onclick="sortTable('sellers','breach_units')">Breach Units</th>
+            <th onclick="sortTable('sellers','breach_pct')">Breach %</th>
+            <th onclick="sortTable('sellers','breach_days')">Breach Days</th>
+            <th onclick="sortTable('sellers','rbnd_days')">RBND Days</th>
+            <th onclick="sortTable('sellers','reattempt_days')">Reattempt Days</th>
+            <th onclick="sortTable('sellers','delay_days')">Delay Days</th>
+            <th onclick="sortTable('sellers','drr_days')">Low DRR Days</th>
+            <th onclick="sortTable('sellers','drr_units')">Low DRR Units</th>
+            <th onclick="sortTable('sellers','severity')">Severity</th>
+            <th>Tags</th>
+          </tr></thead id="tbl-sellers-head"><tbody id="tbody-sellers"></tbody></table>
+        </div>
+      </div>
+
+      <!-- PH ANALYSIS TAB -->
+      <div id="tab-ph" class="tab-content">
+        <div class="summary-strip">
+          <div class="kpi blue"><div class="label">PHs (filtered)</div><div class="value" id="ph-sum-count">—</div></div>
+          <div class="kpi"><div class="label">Base Units</div><div class="value" id="ph-sum-units">—</div></div>
+          <div class="kpi red"><div class="label">Breach %</div><div class="value" id="ph-sum-bpct">—</div><div class="units-sub" id="ph-sum-bunits">—</div></div>
+          <div class="kpi"><div class="label">Total Sellers</div><div class="value" id="ph-sum-sellers">—</div></div>
+          <div class="kpi red"><div class="label">Breach Seller %</div><div class="value" id="ph-sum-bsellers-pct">—</div><div class="units-sub" id="ph-sum-bsellers">—</div></div>
+        </div>
+        <div class="bu-summary">
+          <div class="bu-summary-head">
+            <h3>📦 BU Level Breach Summary</h3>
+            <select class="sc-select" id="ph-sc-filter" onchange="renderBUSummary('ph-bu-tbody','ph-sc-filter')"><option value="">All SCs</option></select>
+          </div>
+          <table class="bu-table"><thead><tr>
+            <th></th><th>Business Unit</th><th>Base Units</th><th>Breach Units</th>
+            <th>Breach %</th><th>RBND Units</th><th>Reattempt Units</th><th>Delay Units</th>
+            <th>Sellers</th><th>Breach Sellers</th><th>Breach Seller %</th>
+          </tr></thead><tbody id="ph-bu-tbody"></tbody></table>
+        </div>
+        <div class="filter-bar">
+          <input type="text" id="ph-search" placeholder="Search PH…" oninput="renderPH()" style="min-width:160px">
+          <div class="ms-wrap" id="ms-ph-breach-wrap"></div>
+          <span class="spacer"></span>
+          <select id="ph-sort" onchange="renderPH()" style="font-size:12px">
+            <option value="breach_units">Sort: Breach Units</option><option value="breach_pct">Sort: Breach %</option>
+            <option value="breach_sellers_pct">Sort: Breach Seller %</option><option value="total_units">Sort: Total Units</option>
+          </select>
+          <button class="btn" onclick="downloadCSV('ph')">⬇ CSV</button>
+        </div>
+        <div class="section-head"><span class="row-count" id="ph-count"></span></div>
+        <div class="table-wrap">
+          <table id="tbl-ph"><thead><tr>
+            <th onclick="sortTable('ph','ph')">PH Name</th>
+            <th onclick="sortTable('ph','total_units')">Total Units</th>
+            <th onclick="sortTable('ph','breach_units')">Breach Units</th>
+            <th onclick="sortTable('ph','breach_pct')">Breach %</th>
+            <th onclick="sortTable('ph','rbnd_units')">RBND Units</th>
+            <th onclick="sortTable('ph','reattempt_units')">Reattempt Units</th>
+            <th onclick="sortTable('ph','delay_units')">Delay Units</th>
+            <th onclick="sortTable('ph','total_sellers')">Total Sellers</th>
+            <th onclick="sortTable('ph','breach_sellers_count')">Breach Sellers</th>
+            <th onclick="sortTable('ph','breach_sellers_pct')">Breach Seller %</th>
+          </tr></thead><tbody id="tbody-ph"></tbody></table>
+        </div>
+      </div>
+
+      <!-- DAILY TREND TAB -->
+      <div id="tab-daily" class="tab-content">
+        <div class="summary-strip">
+          <div class="kpi blue"><div class="label">Days (filtered)</div><div class="value" id="day-sum-days">—</div></div>
+          <div class="kpi"><div class="label">Base Units</div><div class="value" id="day-sum-units">—</div></div>
+          <div class="kpi red"><div class="label">Breach %</div><div class="value" id="day-sum-avgbpct">—</div><div class="units-sub" id="day-sum-bunits">—</div></div>
+          <div class="kpi red"><div class="label">Peak Breach Day</div><div class="value" id="day-sum-peak" style="font-size:13px">—</div></div>
+          <div class="kpi purple" style="--purple:#7c4fef"><div class="label">RBND %</div><div class="value" id="day-sum-rbnd-pct" style="color:var(--accent2)">—</div><div class="units-sub" id="day-sum-rbnd">—</div></div>
+        </div>
+        <div class="bu-summary">
+          <div class="bu-summary-head">
+            <h3>📦 BU Level Breach Summary</h3>
+            <select class="sc-select" id="day-sc-filter" onchange="renderBUSummary('day-bu-tbody','day-sc-filter')"><option value="">All SCs</option></select>
+          </div>
+          <table class="bu-table"><thead><tr>
+            <th></th><th>Business Unit</th><th>Base Units</th><th>Breach Units</th>
+            <th>Breach %</th><th>RBND Units</th><th>Reattempt Units</th><th>Delay Units</th>
+            <th>Sellers</th><th>Breach Sellers</th><th>Breach Seller %</th>
+          </tr></thead><tbody id="day-bu-tbody"></tbody></table>
+        </div>
+        <div class="chart-grid" style="grid-template-columns:1fr">
+          <div class="chart-card"><h3>Daily Breach Units & Breach %</h3><div class="chart-wrap" style="height:280px"><canvas id="chart-daily"></canvas></div></div>
+        </div>
+        <div class="chart-grid">
+          <div class="chart-card"><h3>Daily Breach by Type</h3><div class="chart-wrap"><canvas id="chart-daily-type"></canvas></div></div>
+        </div>
+        <div class="section-head"><h2>Day-by-Day Table</h2><span class="row-count" id="day-count"></span></div>
+        <div class="table-wrap">
+          <table><thead><tr>
+            <th>Date</th><th>Week</th><th>Total Units</th><th>Breach Units</th>
+            <th>Breach %</th><th>RBND</th><th>Reattempt</th><th>Delay</th>
+          </tr></thead><tbody id="tbody-daily"></tbody></table>
+        </div>
+      </div>
+
+      <!-- CRITICAL SELLERS TAB -->
+      <div id="tab-critical" class="tab-content">
+        <div class="summary-strip">
+          <div class="kpi red"><div class="label">Critical Sellers</div><div class="value" id="crit-sum-count">—</div></div>
+          <div class="kpi"><div class="label">Total Units</div><div class="value" id="crit-sum-units">—</div></div>
+          <div class="kpi orange"><div class="label">Breach Units</div><div class="value" id="crit-sum-bunits">—</div></div>
+          <div class="kpi red"><div class="label">Avg Breach %</div><div class="value" id="crit-sum-avgbpct">—</div></div>
+          <div class="kpi"><div class="label">Avg Breach Days</div><div class="value" id="crit-sum-avgdays">—</div></div>
+          <div class="kpi orange"><div class="label">Cluster in Critical</div><div class="value" id="crit-sum-cluster">—</div></div>
+        </div>
+        <div class="bu-summary">
+          <div class="bu-summary-head">
+            <h3>📦 BU Level Breach Summary (critical sellers)</h3>
+            <select class="sc-select" id="crit-sc-filter" onchange="renderBUSummary('crit-bu-tbody','crit-sc-filter')"><option value="">All SCs</option></select>
+          </div>
+          <table class="bu-table"><thead><tr>
+            <th></th><th>Business Unit</th><th>Base Units</th><th>Breach Units</th>
+            <th>Breach %</th><th>RBND Units</th><th>Reattempt Units</th><th>Delay Units</th>
+            <th>Sellers</th><th>Breach Sellers</th><th>Breach Seller %</th>
+          </tr></thead><tbody id="crit-bu-tbody"></tbody></table>
+        </div>
+        <div class="filter-bar">
+          <input type="text" id="crit-search" placeholder="Search seller ID / name…" oninput="renderCritical()" style="min-width:160px">
+          <div class="ms-wrap" id="ms-crit-sev-wrap"></div>
+          <div class="ms-wrap" id="ms-crit-seg-wrap"></div>
+          <span class="spacer"></span>
+          <button class="btn" onclick="downloadCSV('critical')">⬇ CSV</button>
+        </div>
+        <div class="section-head"><span class="row-count" id="crit-count"></span></div>
+        <div class="table-wrap">
+          <table id="tbl-critical"><thead><tr>
+            <th onclick="sortTable('critical','sid')">Seller ID</th>
+            <th onclick="sortTable('critical','name')">Seller Name</th>
+            <th onclick="sortTable('critical','bu')">BU</th>
+            <th onclick="sortTable('critical','sc')">SC</th>
+            <th onclick="sortTable('critical','owner')">Owner</th>
+            <th onclick="sortTable('critical','ph')">PH</th>
+            <th onclick="sortTable('critical','total_units')">Base Units</th>
+            <th onclick="sortTable('critical','breach_units')">Breach Units</th>
+            <th onclick="sortTable('critical','breach_pct')">Breach %</th>
+            <th onclick="sortTable('critical','breach_days')">Breach Days</th>
+            <th onclick="sortTable('critical','rbnd_days')">RBND Days</th>
+            <th onclick="sortTable('critical','reattempt_days')">Reattempt Days</th>
+            <th onclick="sortTable('critical','delay_days')">Delay Days</th>
+            <th onclick="sortTable('critical','severity')">Severity</th>
+            <th>Tags</th>
+          </tr></thead><tbody id="tbody-critical"></tbody></table>
+        </div>
+      </div>
+
+      <!-- CLUSTER SELLERS TAB -->
+      <div id="tab-cluster" class="tab-content">
+        <p style="color:var(--muted);font-size:12px;margin-bottom:12px">Sellers tagged as <strong style="color:var(--accent)">Cluster Seller</strong> from the <em>Cluster Seller</em> column in the raw data.</p>
+        <div class="summary-strip">
+          <div class="kpi green"><div class="label">Cluster Sellers</div><div class="value" id="cl-sum-count">—</div></div>
+          <div class="kpi red"><div class="label">With Breach</div><div class="value" id="cl-sum-breach">—</div><div class="sub" id="cl-sum-breach-pct"></div></div>
+          <div class="kpi"><div class="label">Total Units</div><div class="value" id="cl-sum-units">—</div></div>
+          <div class="kpi orange"><div class="label">Breach Units</div><div class="value" id="cl-sum-bunits">—</div></div>
+          <div class="kpi red"><div class="label">Breach %</div><div class="value" id="cl-sum-bpct">—</div></div>
+          <div class="kpi"><div class="label">Avg Breach Days</div><div class="value" id="cl-sum-avgdays">—</div></div>
+          <div class="kpi orange"><div class="label">Low DRR</div><div class="value" id="cl-sum-lowdrr">—</div></div>
+          <div class="kpi purple" style="--purple:#7c4fef"><div class="label">Incubation</div><div class="value" id="cl-sum-incub" style="color:var(--accent2)">—</div></div>
+        </div>
+        <div class="bu-summary">
+          <div class="bu-summary-head">
+            <h3>📦 BU Level Breach Summary (cluster sellers)</h3>
+            <select class="sc-select" id="cl-sc-filter" onchange="renderBUSummary('cl-bu-tbody','cl-sc-filter')"><option value="">All SCs</option></select>
+          </div>
+          <table class="bu-table"><thead><tr>
+            <th></th><th>Business Unit</th><th>Base Units</th><th>Breach Units</th>
+            <th>Breach %</th><th>RBND Units</th><th>Reattempt Units</th><th>Delay Units</th>
+            <th>Sellers</th><th>Breach Sellers</th><th>Breach Seller %</th>
+          </tr></thead><tbody id="cl-bu-tbody"></tbody></table>
+        </div>
+        <!-- All column filters for Cluster tab -->
+        <div class="filter-bar" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:12px;flex-wrap:wrap">
+          <span style="color:var(--muted);font-size:11px;font-weight:600;margin-right:8px">FILTERS</span>
+          <input type="text" id="cl-search" placeholder="Search seller ID / name…" oninput="renderCluster()" style="min-width:160px;font-size:12px">
+          <div class="ms-wrap" id="ms-cl-ph-wrap"></div>
+          <div class="ms-wrap" id="ms-cl-breach-wrap"></div>
+          <div class="ms-wrap" id="ms-cl-btype-wrap"></div>
+          <div class="ms-wrap" id="ms-cl-drr-wrap"></div>
+          <div class="ms-wrap" id="ms-cl-incub-wrap"></div>
+          <div class="ms-wrap" id="ms-cl-sev-wrap"></div>
+          <div class="ms-wrap" id="ms-cl-issue-wrap"></div>
+          <span class="spacer"></span>
+          <select id="cl-sort" onchange="renderCluster()" style="font-size:12px">
+            <option value="breach_units">Sort: Breach Units</option><option value="breach_pct">Sort: Breach %</option>
+            <option value="breach_days">Sort: Breach Days</option><option value="total_units">Sort: Total Units</option>
+          </select>
+          <button class="btn" onclick="clearClusterFilters()">✕ Clear</button>
+          <button class="btn" onclick="downloadCSV('cluster')">⬇ CSV</button>
+        </div>
+        <div class="section-head"><span class="row-count" id="cl-count"></span></div>
+        <div class="table-wrap">
+          <table id="tbl-cluster"><thead><tr>
+            <th onclick="sortTable('cluster','sid')">Seller ID</th>
+            <th onclick="sortTable('cluster','name')">Seller Name</th>
+            <th onclick="sortTable('cluster','bu')">BU</th>
+            <th onclick="sortTable('cluster','sc')">SC</th>
+            <th onclick="sortTable('cluster','owner')">Owner</th>
+            <th onclick="sortTable('cluster','am')">AM</th>
+            <th onclick="sortTable('cluster','ph')">PH</th>
+            <th onclick="sortTable('cluster','total_units')">Base Units</th>
+            <th onclick="sortTable('cluster','breach_units')">Breach Units</th>
+            <th onclick="sortTable('cluster','breach_pct')">Breach %</th>
+            <th onclick="sortTable('cluster','breach_days')">Breach Days</th>
+            <th onclick="sortTable('cluster','rbnd_days')">RBND Days</th>
+            <th onclick="sortTable('cluster','reattempt_days')">Reattempt Days</th>
+            <th onclick="sortTable('cluster','delay_days')">Delay Days</th>
+            <th onclick="sortTable('cluster','lowDRR')">Low DRR</th>
+            <th onclick="sortTable('cluster','incubation')">Incubation</th>
+            <th onclick="sortTable('cluster','severity')">Severity</th>
+          </tr></thead><tbody id="tbody-cluster"></tbody></table>
+        </div>
+
+        <!-- AM Level Breach Table -->
+        <div class="bu-summary" style="margin-top:16px">
+          <div class="bu-summary-head">
+            <h3>👤 AM Level Breach Summary (Cluster Sellers)</h3>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select class="sc-select" id="cl-am-filter" onchange="renderAMTable()" style="min-width:200px">
+                <option value="">All AMs</option>
+              </select>
+              <button class="btn" onclick="downloadCSV('am')" style="font-size:11px">⬇ CSV</button>
+            </div>
+          </div>
+          <!-- AM Summary Strip -->
+          <div id="am-summary-strip" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;padding:12px 14px;border-bottom:1px solid var(--border)">
+            <div class="kpi blue" style="padding:10px 12px"><div class="label">AMs</div><div class="value" id="am-sum-count" style="font-size:18px">—</div></div>
+            <div class="kpi red" style="padding:10px 12px"><div class="label">Breach Sellers</div><div class="value" id="am-sum-bsellers" style="font-size:18px">—</div></div>
+            <div class="kpi"><div class="label" style="padding:10px 12px">Total Units</div><div class="value" id="am-sum-units" style="font-size:18px">—</div></div>
+            <div class="kpi orange" style="padding:10px 12px"><div class="label">Breach Units</div><div class="value" id="am-sum-bunits" style="font-size:18px">—</div></div>
+            <div class="kpi red" style="padding:10px 12px"><div class="label">Breach %</div><div class="value" id="am-sum-bpct" style="font-size:18px">—</div></div>
+          </div>
+          <div style="overflow-x:auto;max-height:400px;overflow-y:auto">
+            <table class="bu-table" id="tbl-am">
+              <thead><tr>
+                <th onclick="sortAMTable('am')">Account Manager</th>
+                <th onclick="sortAMTable('total_sellers')">Total Sellers</th>
+                <th onclick="sortAMTable('breach_sellers')">Breach Sellers</th>
+                <th onclick="sortAMTable('breach_seller_pct')">Breach Seller %</th>
+                <th onclick="sortAMTable('total_units')">Total Units</th>
+                <th onclick="sortAMTable('breach_units')">Breach Units</th>
+                <th onclick="sortAMTable('breach_pct')">Breach %</th>
+                <th onclick="sortAMTable('avg_breach_days')">Avg Breach Days</th>
+              </tr></thead>
+              <tbody id="tbody-am"></tbody>
+            </table>
+          </div>
+          <!-- Seller detail panel shown when AM is selected -->
+          <div id="am-seller-detail" style="display:none;border-top:1px solid var(--border)">
+            <div style="padding:10px 14px;background:var(--surface2);font-size:12px;font-weight:600;color:var(--accent)" id="am-seller-detail-title"></div>
+            <div style="overflow-x:auto;max-height:300px;overflow-y:auto">
+              <table class="bu-table">
+                <thead><tr>
+                  <th>Seller ID</th><th>Seller Name</th><th>PH</th><th>BU</th>
+                  <th>Total Units</th><th>Breach Units</th><th>Breach %</th><th>Breach Days</th><th>Severity</th>
+                </tr></thead>
+                <tbody id="tbody-am-sellers"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /dashboard -->
+
+      <!-- EKART ISSUES TAB -->
+      <div id="tab-ekart" class="tab-content">
+        <p style="color:var(--muted);font-size:12px;margin-bottom:12px">
+          <strong>Low DRR Pickup Issue</strong> — Conditions: fulfill_item_unit_status = dispatched · mp_status = (blank)/created/out_for_pickup · issue_type = ekart issue · rtd breach = false · seller_holiday_flag = (blank) · Low_DRR_Status = Low DRR</p>
+        <div class="summary-strip">
+          <div class="kpi blue"><div class="label">Unique Sellers</div><div class="value" id="ek-sum-sellers">—</div></div>
+          <div class="kpi"><div class="label">Total Units</div><div class="value" id="ek-sum-units">—</div></div>
+          <div class="kpi red"><div class="label">Unique Days</div><div class="value" id="ek-sum-days">—</div></div>
+          <div class="kpi orange"><div class="label">Unique PHs</div><div class="value" id="ek-sum-phs">—</div></div>
+          <div class="kpi green"><div class="label">Unique BUs</div><div class="value" id="ek-sum-bus">—</div></div>
+        </div>
+        <!-- Week summary dropdown -->
+        <div class="bu-summary" style="margin-bottom:16px">
+          <div class="bu-summary-head">
+            <h3>⚡ Week-level Summary</h3>
+            <select class="sc-select" id="ek-week-group" onchange="renderEkartWeekSummary()">
+              <option value="week">Group by Week</option>
+              <option value="bu">Group by BU</option>
+              <option value="sc">Group by SC</option>
+              <option value="ph">Group by PH</option>
+            </select>
+          </div>
+          <table class="bu-table"><thead><tr id="ek-week-thead">
+            <th>Week</th><th>Units</th><th>Sellers</th><th>Days</th><th>PHs</th><th>BUs</th><th>SCs</th>
+          </tr></thead><tbody id="ek-week-tbody"></tbody></table>
+        </div>
+        <div class="filter-bar">
+          <input type="text" id="ek-search" placeholder="Search seller ID / name…" oninput="renderEkart()" style="min-width:180px;font-size:12px">
+          <div class="ms-wrap" id="ms-ek-ph-wrap"></div>
+          <div class="ms-wrap" id="ms-ek-week-wrap"></div>
+          <span class="spacer"></span>
+          <select id="ek-sort" onchange="renderEkart()" style="font-size:12px">
+            <option value="units">Sort: Units</option>
+            <option value="days">Sort: Days</option>
+            <option value="sellers">Sort: Sellers</option>
+          </select>
+          <button class="btn" onclick="downloadCSV('ekart')">⬇ CSV</button>
+        </div>
+        <div class="section-head"><span class="row-count" id="ek-count"></span></div>
+        <div class="table-wrap">
+          <table id="tbl-ekart"><thead><tr>
+            <th onclick="sortTable('ekart','sid')">Seller ID</th>
+            <th onclick="sortTable('ekart','name')">Seller Name</th>
+            <th onclick="sortTable('ekart','bu')">BU</th>
+            <th onclick="sortTable('ekart','sc')">SC</th>
+            <th onclick="sortTable('ekart','owner')">Owner</th>
+            <th onclick="sortTable('ekart','ph')">PH</th>
+            <th onclick="sortTable('ekart','units')">Units</th>
+            <th onclick="sortTable('ekart','days')">Unique Days</th>
+          </tr></thead><tbody id="tbody-ekart"></tbody></table>
+        </div>
+      </div>
+  </main>
+</div>
+
+<!-- GitHub Modal -->
+<div id="gh-panel">
+  <div class="gh-modal">
+    <h2>⚙ GitHub Sync Setup</h2>
+    <p style="color:var(--muted);font-size:12px;margin-bottom:14px">Viewers only need username + repo. PAT is admin-only for publishing data.</p>
+    <div class="form-row"><label>GitHub Username / Org</label><input id="gh-user" placeholder="e.g. myorg"></div>
+    <div class="form-row"><label>Repository Name</label><input id="gh-repo" placeholder="e.g. pickup-scorecard"></div>
+    <div class="form-row"><label>Branch</label><input id="gh-branch" placeholder="main" value="main"></div>
+    <div class="form-row"><label>Personal Access Token (PAT) — admin only</label><input id="gh-pat" type="password" placeholder="ghp_…"></div>
+    <div id="gh-test-result" style="font-size:12px;margin-top:6px"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeGHPanel()">Cancel</button>
+      <button class="btn primary" onclick="saveGHConfig()">✅ Save & Test</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+
+const SELLER_MAPPING = {};
+async function loadSellerMapping(){
+  try{
+    const r = await fetch('https://cdn.jsdelivr.net/gh/snehab1vc-alt/pickup-scorecard@main/seller-mapping.json?t='+Date.now());
+    if(r.ok){ const d=await r.json(); Object.assign(SELLER_MAPPING,d); console.log('Mapping loaded:',Object.keys(d).length,'sellers'); }
+  }catch(e){ console.warn('Mapping load failed:',e.message); }
+}
+// ══════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════
+let RAW = [];
+let FILTERED = [];      // RAW after global filters
+let SELLER_MAP = {};
+let PH_MAP = {};
+let DAILY_MAP = {};
+let CLUSTER_IDS = new Set();
+let DATE_WEEK_MAP = {}; // date -> week num
+let GH = {};
+let CHARTS = {};
+let _selData=[], _phData=[], _critData=[], _clData=[];
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+window.addEventListener('DOMContentLoaded', async () => {
+  await loadSellerMapping();
+  loadGHConfig();
+  tryAutoLoadFromGH();
+});
+
+function loadGHConfig(){
+  try{
+    GH = JSON.parse(localStorage.getItem('pickup_gh_cfg') || '{}');
+    if(GH.user && GH.repo){
+      document.getElementById('gh-user').value = GH.user;
+      document.getElementById('gh-repo').value = GH.repo;
+      document.getElementById('gh-branch').value = GH.branch || 'main';
+      document.getElementById('gh-pat').value = GH.pat || '';
+      setGHDot('ok');
+    }
+  }catch(e){}
+}
+
+async function tryAutoLoadFromGH(){
+  const user='snehab1vc-alt';
+  const repo='pickup-scorecard';
+  const branch='main';
+  // Use jsDelivr CDN - not blocked by GitHub Pages CSP
+  const cdnUrl=`https://cdn.jsdelivr.net/gh/${user}/${repo}@${branch}/dashboard-data.json?t=${Date.now()}`;
+  // Fallback: GitHub API (needs no CSP workaround)
+  const apiUrl=`https://api.github.com/repos/${user}/${repo}/contents/dashboard-data.json`;
+
+  setUploadStatus('🔄 Loading data from GitHub…',40);
+  document.getElementById('upload-progress').style.display='';
+  document.getElementById('upload-progress-fill').style.width='40%';
+
+  try{
+    // Try jsDelivr first (fast CDN, no CSP issues)
+    let r=await fetch(cdnUrl);
+    if(!r.ok){
+      // Fallback to GitHub API with Accept header to get raw content
+      const h={'Accept':'application/vnd.github.v3.raw'};
+      if(GH.pat) h['Authorization']='token '+GH.pat;
+      r=await fetch(apiUrl,{headers:h});
+    }
+    if(!r.ok){
+      setUploadStatus(`❌ Could not load data (HTTP ${r.status}) — upload your CSV`,100);
+      return;
+    }
+    const text=await r.text();
+    if(!text||text.trim().length<50){
+      setUploadStatus('❌ No data published yet — upload CSV then Publish',100);
+      return;
+    }
+    let data;
+    try{ data=JSON.parse(text); }
+    catch(e){
+      setUploadStatus('❌ Data file corrupted — re-publish',100);
+      return;
+    }
+    const count=data.v===4?(data.sellers||[]).length:Object.keys(data.sellerMap||{}).length;
+    if(count===0){
+      setUploadStatus('❌ Empty data — upload CSV then Publish',100);
+      return;
+    }
+    setUploadStatus(`✅ Loaded ${count.toLocaleString()} sellers…`,90);
+    ingestJSON(data);
+  }catch(e){
+    setUploadStatus('❌ Error: '+e.message+' — upload your CSV to continue',100);
+  }
+}
+
+// ══════════════════════════════════════════
+// FILE HANDLING
+// ══════════════════════════════════════════
+function handleDrop(e){
+  e.preventDefault();
+  document.getElementById('upload-zone').classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if(f) processFile(f);
+}
+function handleFileInput(input){
+  const f = input.files[0];
+  if(f) processFile(f);
+  input.value='';
+}
+function processFile(f){
+  if(f.name.endsWith('.json')){ loadJSON(f); return; }
+  // Accept any CSV file regardless of name
+  if(!f.name.toLowerCase().endsWith('.csv')){
+    showToast('Please upload a CSV or JSON file','err'); return;
+  }
+  setUploadStatus('Reading CSV…',20);
+  Papa.parse(f,{
+    header:false, skipEmptyLines:true,
+    complete:(res)=>{
+      setUploadStatus('Parsing '+res.data.length+' rows…',60);
+      setTimeout(()=>{
+        const ok=parseCSV(res.data);
+        if(ok){ setUploadStatus('Building dashboard…',85); setTimeout(()=>buildDashboard(),50); }
+      },10);
+    },
+    error:(err)=>{ showToast('CSV error: '+err.message,'err'); setUploadStatus('❌ '+err.message,100); }
+  });
+}
+
+function parseCSV(rows){
+  let hi=-1;
+  // Search first 10 rows for header
+  for(let i=0;i<Math.min(10,rows.length);i++){
+    if(rows[i].some(c=>String(c).toLowerCase().trim()==='dispatch_expected_date'||
+                       String(c).toLowerCase().trim()==='seller_id')){ hi=i; break; }
+  }
+  if(hi<0){
+    showToast('Header row not found — expected dispatch_expected_date column','err');
+    setUploadStatus('❌ Header not found in first 10 rows',100);
+    return false;
+  }
+  const hdrs = rows[hi].map(h=>String(h).trim());
+  RAW=[];
+  for(let i=hi+1;i<rows.length;i++){
+    if(!rows[i] || rows[i].length<2) continue;
+    const row={};
+    hdrs.forEach((h,j)=>{ row[h] = rows[i][j]!==undefined ? String(rows[i][j]).trim() : ''; });
+    RAW.push(row);
+  }
+  if(!RAW.length){
+    showToast('No data rows found in CSV','err');
+    setUploadStatus('❌ No data rows found',100);
+    return false;
+  }
+  DATE_WEEK_MAP={};
+  RAW.forEach(r=>{
+    if(r['dispatch_expected_date'] && r['Week num'])
+      DATE_WEEK_MAP[r['dispatch_expected_date']] = r['Week num'];
+  });
+  setUploadStatus(`✅ Loaded ${RAW.length.toLocaleString()} rows`,90);
+  return true;
+}
+
+// ══════════════════════════════════════════
+// GLOBAL FILTER
+// ══════════════════════════════════════════
+function applyGlobalFilter(){
+  const weeks  = getMSVals('gf-week');
+  const months = getMSVals('gf-month');
+  const dates  = getMSVals('gf-date');
+  const phs    = getMSVals('gf-ph');
+  const bus    = getMSVals('gf-bu');
+  const owners = getMSVals('gf-owner');
+  const btypes = getMSVals('gf-btype');
+
+  if(RAW.length===0){
+    // JSON mode — filter SELLER_MAP and PH_MAP directly
+    // Week/date/month filters not applicable in JSON mode (no raw rows)
+    // PH filter works on seller.ph
+    // BU/Owner filter works via mapping
+    // Breach type filter not applicable in JSON mode
+    const noFilter = phs.size===0 && bus.size===0 && owners.size===0;
+    if(noFilter){
+      // Reset to full data — re-ingest would be needed, just re-render
+      document.getElementById('gf-row-count').textContent=
+        `${fmtN(Object.values(SELLER_MAP).reduce((a,s)=>a+s.total_units,0))} base units`;
+      refreshCurrentTab();
+      return;
+    }
+    // Apply PH/BU/Owner filters on current SELLER_MAP
+    const filteredSellers = Object.values(SELLER_MAP).filter(s=>{
+      if(phs.size && !phs.has(s.ph)) return false;
+      if(bus.size || owners.size){
+        const m=smap(s.sid);
+        if(bus.size && !bus.has(m[1])) return false;
+        if(owners.size && !owners.has(m[3])) return false;
+      }
+      return true;
+    });
+    const tu=filteredSellers.reduce((a,s)=>a+s.total_units,0);
+    document.getElementById('gf-row-count').textContent=`${fmtN(tu)} base units (filtered)`;
+    // Temporarily override SELLER_MAP for rendering
+    const saved=SELLER_MAP;
+    SELLER_MAP=Object.fromEntries(filteredSellers.map(s=>[s.sid,s]));
+    refreshCurrentTab();
+    SELLER_MAP=saved;
+    return;
+  }
+
+  FILTERED = RAW.filter(r=>{
+    if(weeks.size  && !weeks.has(String(r['Week num']))) return false;
+    if(months.size && !months.has(String(r['Month num']))) return false;
+    if(dates.size  && !dates.has(r['dispatch_expected_date'])) return false;
+    if(phs.size    && !phs.has(r['large_ph_name'])) return false;
+    if(bus.size || owners.size){
+      const m = smap(r['seller_id']);
+      if(bus.size && !bus.has(m[1])) return false;
+      if(owners.size && !owners.has(m[3])) return false;
+    }
+    if(btypes.size){
+      const b = r['DBD Breach']||'';
+      const matched = [...btypes].some(bt =>
+        bt==='Delay dispatch' ? (b==='Delay dispatch'||b==='Delay Dispatch') : b===bt
+      );
+      if(!matched) return false;
+    }
+    return true;
+  });
+
+  document.getElementById('gf-row-count').textContent = `${FILTERED.length.toLocaleString()} rows`;
+  aggregate();
+  refreshCurrentTab();
+}
+
+function clearGlobalFilters(){
+  ['gf-week','gf-month','gf-date','gf-ph','gf-bu','gf-owner','gf-btype'].forEach(id=>clearMS(id));
+  applyGlobalFilter();
+}
+
+function refreshCurrentTab(){
+  const active = document.querySelector('.tab-content.active');
+  if(!active) return;
+  const id = active.id.replace('tab-','');
+  if(id==='overview') renderOverview();
+  else if(id==='sellers') renderSellers();
+  else if(id==='ph') renderPH();
+  else if(id==='daily') renderDaily();
+  else if(id==='critical') renderCritical();
+  else if(id==='cluster') renderCluster();
+  else if(id==='ekart') renderEkart();
+}
+
+// ══════════════════════════════════════════
+// AGGREGATE (from FILTERED)
+// ══════════════════════════════════════════
+function aggregate(){
+  SELLER_MAP={};PH_MAP={};DAILY_MAP={};CLUSTER_IDS=new Set();
+
+  FILTERED.forEach(row=>{
+    const sid = row['seller_id']||'';
+    const ph  = row['large_ph_name']||'';
+    const date= row['dispatch_expected_date']||'';
+    const units= parseFloat(row['Sum of units'])||0;
+    const embargo=(row['Embargo']||'').toLowerCase()==='embargo';
+    const breach = row['DBD Breach']||'-';
+    const isB = breach!=='-' && breach!=='';
+    const clVal= row['Cluster Seller']||'';
+    const issueType=(row['issue_type']||'').toLowerCase();
+    const incubation= row['Incubation']==='Incubation';
+    const lowDRR= row['Low_DRR_Status']!=='-' && row['Low_DRR_Status']!=='';
+    const week = row['Week num']||'';
+    // Base = exclude Cancellation_and_returns from Overall_Status
+    const isCancelled=(row['Overall_Status']||'')==='Cancellation_and_returns';
+    const isBase=!isCancelled;
+
+    if(clVal==='Cluster Seller') CLUSTER_IDS.add(sid);
+
+    if(!embargo && isBase){
+      if(!SELLER_MAP[sid]) SELLER_MAP[sid]={
+        sid,ph,incubation,lowDRR,isCluster:false,issueType,
+        total_units:0,breach_units:0,
+        breach_dates:new Set(),all_dates:new Set(),
+        rbnd_dates:new Set(),reattempt_dates:new Set(),delay_dates:new Set(),
+        drr_dates:new Set(),drr_units:0
+      };
+      const s=SELLER_MAP[sid];
+      s.total_units+=units; s.all_dates.add(date);
+      if(isB){ s.breach_units+=units; s.breach_dates.add(date); }
+      if(breach==='RBND Breach') s.rbnd_dates.add(date);
+      if(breach==='Reattempt Breach') s.reattempt_dates.add(date);
+      if(breach==='Delay dispatch'||breach==='Delay Dispatch') s.delay_dates.add(date);
+      // Low DRR tracking
+      if(lowDRR){ s.drr_dates.add(date); s.drr_units+=units; }
+
+      if(!PH_MAP[ph]) PH_MAP[ph]={ph,total_units:0,breach_units:0,rbnd_units:0,reattempt_units:0,delay_units:0,sellers:new Set(),breach_sellers:new Set()};
+      const p=PH_MAP[ph];
+      p.total_units+=units; p.sellers.add(sid);
+      if(isB){ p.breach_units+=units; p.breach_sellers.add(sid);
+        if(breach==='RBND Breach') p.rbnd_units+=units;
+        if(breach==='Reattempt Breach') p.reattempt_units+=units;
+        if(breach==='Delay dispatch'||breach==='Delay Dispatch') p.delay_units+=units;
+      }
+    }
+
+    // Daily: base units only (excl C&R), breach only from base+non-embargo
+    if(!DAILY_MAP[date]) DAILY_MAP[date]={date,week,total_units:0,breach_units:0,rbnd:0,reattempt:0,delay:0};
+    const d=DAILY_MAP[date];
+    if(isBase) d.total_units+=units;
+    if(isB&&!embargo&&isBase){ d.breach_units+=units;
+      if(breach==='RBND Breach') d.rbnd+=units;
+      if(breach==='Reattempt Breach') d.reattempt+=units;
+      if(breach==='Delay dispatch'||breach==='Delay Dispatch') d.delay+=units;
+    }
+  });
+
+  Object.values(SELLER_MAP).forEach(s=>{
+    s.isCluster=CLUSTER_IDS.has(s.sid);
+    s.breach_days=s.breach_dates.size; s.total_days=s.all_dates.size;
+    s.rbnd_days=s.rbnd_dates.size; s.reattempt_days=s.reattempt_dates.size; s.delay_days=s.delay_dates.size;
+    s.drr_days=s.drr_dates?s.drr_dates.size:0;
+    s.breach_pct=s.total_units>0?(s.breach_units/s.total_units*100):0;
+    s.high_pct_days=s.breach_days;
+    delete s.breach_dates;delete s.all_dates;delete s.rbnd_dates;delete s.reattempt_dates;delete s.delay_dates;delete s.drr_dates;
+  });
+  Object.values(PH_MAP).forEach(p=>{
+    p.total_sellers=p.sellers.size; p.breach_sellers_count=p.breach_sellers.size;
+    p.breach_pct=p.total_units>0?(p.breach_units/p.total_units*100):0;
+    p.breach_sellers_pct=p.total_sellers>0?(p.breach_sellers_count/p.total_sellers*100):0;
+    delete p.sellers;delete p.breach_sellers;
+  });
+}
+
+// ══════════════════════════════════════════
+// BUILD DASHBOARD
+// ══════════════════════════════════════════
+function buildDashboard(fromJSON){
+  if(!fromJSON){
+    FILTERED=[...RAW];
+    aggregate();
+  } else {
+    // Set FILTERED to empty array marker so render functions know we're in JSON mode
+    FILTERED=[];
+  }
+  setUploadStatus('',100);
+  // Show dashboard first so DOM is ready for charts
+  document.getElementById('upload-screen').style.display='none';
+  document.getElementById('dashboard').style.display='block';
+  document.getElementById('sidebar').style.display='block';
+  ['btn-export','btn-reset','btn-upload-hdr','btn-publish'].forEach(id=>document.getElementById(id).style.display='');
+
+  const phs=[...new Set(Object.values(SELLER_MAP).map(s=>s.ph).filter(Boolean))].sort();
+  const weeks=[...new Set(Object.values(DAILY_MAP).map(d=>String(d.week)).filter(Boolean))].sort((a,b)=>+a-+b);
+  const dates=sortDates([...new Set(Object.values(DAILY_MAP).map(d=>d.date).filter(Boolean))]);
+  initAllMultiSelectsWithData(phs, weeks, dates);
+
+  const totalBaseUnits=Object.values(SELLER_MAP).reduce((a,s)=>a+s.total_units,0);
+  document.getElementById('gf-row-count').textContent=fromJSON
+    ? `${fmtN(totalBaseUnits)} base units`
+    : `${RAW.length.toLocaleString()} rows`;
+
+  // Make overview tab active and visible BEFORE rendering
+  document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('nav a').forEach(el=>el.classList.remove('active'));
+  document.getElementById('tab-overview').classList.add('active');
+  document.querySelector('nav a[data-tab="overview"]').classList.add('active');
+
+  // Build ekart data from RAW
+  EKART_DATA=[];
+  if(RAW.length) buildEkartData();
+
+  // Render all tabs after a short delay so DOM is painted
+  setTimeout(()=>{
+    renderOverview();
+    renderSellers();
+    renderPH();
+    renderDaily();
+    renderCritical();
+    renderCluster();
+    if(EKART_DATA.length) renderEkart();
+    showToast('✅ Dashboard ready','ok');
+  }, 200);
+}
+
+function populateGlobalFilters(){
+  // Multi-selects are initialized in initAllMultiSelects() called from buildDashboard
+}
+
+// ══════════════════════════════════════════
+// OVERVIEW
+// ══════════════════════════════════════════
+function renderOverview(){
+  const sellers=Object.values(SELLER_MAP);
+  if(!sellers.length) return;
+  const totalS=sellers.length, breachedS=sellers.filter(s=>s.breach_units>0).length;
+  const totalU=sellers.reduce((a,s)=>a+s.total_units,0);
+  const breachU=sellers.reduce((a,s)=>a+s.breach_units,0);
+  const bpct=totalU>0?(breachU/totalU*100).toFixed(2):0;
+
+  // Breach type units — from FILTERED if available, else from PH_MAP aggregates
+  let rbnd=0,reattempt=0,delay=0;
+  if(FILTERED.length>0){
+    FILTERED.forEach(r=>{
+      if((r['Embargo']||'').toLowerCase()==='embargo') return;
+      if((r['Overall_Status']||'')==='Cancellation_and_returns') return;
+      const u=parseFloat(r['Sum of units'])||0;
+      const b=r['DBD Breach']||'';
+      if(b==='RBND Breach') rbnd+=u;
+      else if(b==='Reattempt Breach') reattempt+=u;
+      else if(b==='Delay dispatch'||b==='Delay Dispatch') delay+=u;
+    });
+  } else {
+    // JSON mode — sum from PH_MAP
+    Object.values(PH_MAP).forEach(p=>{
+      rbnd+=p.rbnd_units||0;
+      reattempt+=p.reattempt_units||0;
+      delay+=p.delay_units||0;
+    });
+  }
+
+  const sellerBPct=totalS>0?((breachedS/totalS)*100).toFixed(1):0;
+  const rbndPct=totalU>0?(rbnd/totalU*100).toFixed(2):0;
+  const reattemptPct=totalU>0?(reattempt/totalU*100).toFixed(2):0;
+  const delayPct=totalU>0?(delay/totalU*100).toFixed(2):0;
+
+  set('ov-sellers',fmt(totalS));
+  set('ov-bsellers-pct',`${sellerBPct}% breached`);
+  // Breached sellers card: % as main, count as sub
+  set('ov-bsellers-pct2',sellerBPct+'%');
+  set('ov-bsellers',fmt(breachedS)+' sellers');
+  // Base units
+  set('ov-units',fmtN(totalU));
+  // Breach: % as main, units as sub
+  set('ov-bpct',bpct+'%');
+  set('ov-bunits',fmtN(breachU)+' units');
+  set('ov-cluster',fmt(CLUSTER_IDS.size));
+  // RBND: % as main, units as sub
+  set('ov-rbnd-pct',rbndPct+'%');
+  set('ov-rbnd',fmtN(rbnd)+' units');
+  // Reattempt: % as main, units as sub
+  set('ov-reattempt-pct',reattemptPct+'%');
+  set('ov-reattempt',fmtN(reattempt)+' units');
+  // Delay: % as main, units as sub
+  set('ov-delay-pct',delayPct+'%');
+  set('ov-delay',fmtN(delay)+' units');
+
+  drawPHChart(); drawTypeChart(rbnd,reattempt,delay); drawTopSellersChart();
+  renderBUSummary('ov-bu-tbody','ov-sc-filter');
+}
+
+function drawPHChart(){
+  const top15=Object.values(PH_MAP).sort((a,b)=>b.breach_units-a.breach_units).slice(0,15);
+  drawBar('chart-ph',top15.map(p=>p.ph),top15.map(p=>p.breach_units),'#4f7cf7');
+}
+function drawTypeChart(rbnd,reattempt,delay){
+  const el=document.getElementById('chart-type');
+  if(!el) return;
+  const ctx=el.getContext('2d');
+  destroyChart('chart-type');
+  CHARTS['chart-type']=new Chart(ctx,{type:'doughnut',data:{
+    labels:['RBND Breach','Reattempt Breach','Delay Dispatch'],
+    datasets:[{data:[rbnd,reattempt,delay],backgroundColor:['#f7564f','#f79f4f','#4f7cf7'],borderWidth:0}]
+  },options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#6b7280',font:{size:11}}}}}});
+}
+function drawTopSellersChart(){
+  const top15=Object.values(SELLER_MAP).sort((a,b)=>b.breach_units-a.breach_units).slice(0,15);
+  drawBar('chart-sellers',top15.map(s=>s.sid.slice(0,10)+'…'),top15.map(s=>s.breach_units),'#7c4fef');
+}
+function drawBar(id,labels,data,color){
+  const el=document.getElementById(id);
+  if(!el) return;
+  const ctx=el.getContext('2d');
+  destroyChart(id);
+  CHARTS[id]=new Chart(ctx,{type:'bar',data:{labels,datasets:[{data,backgroundColor:color,borderRadius:4,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:'#6b7280',font:{size:10},maxRotation:45},grid:{color:'#dde1ee'}},
+              y:{ticks:{color:'#6b7280',font:{size:10}},grid:{color:'#dde1ee'}}}}});
+}
+function destroyChart(id){ if(CHARTS[id]){CHARTS[id].destroy();delete CHARTS[id];} }
+
+// ══════════════════════════════════════════
+// SELLERS
+// ══════════════════════════════════════════
+function renderSellers(){
+  let data=Object.values(SELLER_MAP);
+  const search=document.getElementById('sel-search').value.toLowerCase();
+  const minD=parseInt(document.getElementById('sel-breach-days').value)||0;
+  const segs=getMSVals('sel-seg');
+  const sevs=getMSVals('sel-sev');
+  const issues=getMSVals('sel-issue');
+  const sortBy=document.getElementById('sel-sort').value;
+
+  if(search) data=data.filter(s=>{ const m=smap(s.sid); return s.sid.toLowerCase().includes(search)||s.ph.toLowerCase().includes(search)||(m[0]||'').toLowerCase().includes(search); });
+  data=data.filter(s=>s.breach_days>=minD);
+  if(segs.size){
+    data=data.filter(s=>{
+      if(segs.has('incubation')&&s.incubation) return true;
+      if(segs.has('low_drr')&&s.lowDRR) return true;
+      if(segs.has('cluster')&&s.isCluster) return true;
+      return false;
+    });
+  }
+  if(sevs.size){
+    data=data.filter(s=>{
+      if(sevs.has('critical')&&s.breach_days>=15) return true;
+      if(sevs.has('moderate')&&s.breach_days>=8&&s.breach_days<15) return true;
+      if(sevs.has('low')&&s.breach_days>=1&&s.breach_days<8) return true;
+      return false;
+    });
+  }
+  if(issues.size) data=data.filter(s=>issues.has('seller')&&s.issueType.includes('seller')||issues.has('ekart')&&s.issueType.includes('ekart'));
+  const _st_sellers=SORT_STATE['sellers'];
+  if(_st_sellers){ smartSort(data,_st_sellers.col,_st_sellers.dir); }
+  else { smartSort(data,'breach_units',-1); }
+
+  // Summary
+  const tu=data.reduce((a,s)=>a+s.total_units,0);
+  const bu=data.reduce((a,s)=>a+s.breach_units,0);
+  const bs=data.filter(s=>s.breach_units>0).length;
+  const avgD=data.length>0?(data.reduce((a,s)=>a+s.breach_days,0)/data.length).toFixed(1):0;
+  const bsPct=data.length>0?((bs/data.length)*100).toFixed(1):0;
+  set('sel-sum-sellers',fmt(data.length));
+  set('sel-sum-bsellers-pct',bsPct+'%');
+  set('sel-sum-bsellers',fmt(bs)+' sellers');
+  set('sel-sum-units',fmtN(tu));
+  set('sel-sum-bpct',tu>0?(bu/tu*100).toFixed(1)+'%':'0%');
+  set('sel-sum-bunits',fmtN(bu)+' units');
+  set('sel-sum-avgdays',avgD);
+
+  set('sel-count',`${data.length} sellers`);
+  _selData=data;
+  const tbody=document.getElementById('tbody-sellers');
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="12" class="empty">No sellers match</td></tr>`;return;}
+  tbody.innerHTML=data.slice(0,500).map(s=>{
+    const sv=severity(s.breach_days,s.breach_pct);
+    const m=smap(s.sid);
+    return `<tr><td><code style="font-size:11px">${s.sid}</code></td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="${m[0]}">${m[0]||'—'}</td>
+      <td>${m[1]||'—'}</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis" title="${m[2]}">${m[2]||'—'}</td>
+      <td><span class="badge ${m[3]==='KAM'?'blue':'grey'}">${m[3]||'—'}</span></td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis" title="${m[4]}">${m[4]||'—'}</td>
+      <td>${s.ph}</td><td>${fmtN(s.total_units)}</td>
+      <td>${fmtN(s.breach_units)}</td><td>${pctBar(s.breach_pct)}</td><td>${s.breach_days}</td>
+      <td>${s.rbnd_days}</td><td>${s.reattempt_days}</td><td>${s.delay_days}</td>
+      <td>${s.drr_days||0}</td><td>${fmtN(s.drr_units||0)}</td>
+      <td>${sevBadge(sv)}</td><td>${tags(s)}</td></tr>`;
+  }).join('');
+  renderBUSummary('sel-bu-tbody','sel-sc-filter', data);
+}
+
+// ══════════════════════════════════════════
+// PH
+// ══════════════════════════════════════════
+function renderPH(){
+  let data=Object.values(PH_MAP);
+  const search=document.getElementById('ph-search').value.toLowerCase();
+  const bfs=getMSVals('ph-bfilter');
+  const sortBy=document.getElementById('ph-sort').value;
+
+  if(search) data=data.filter(p=>p.ph.toLowerCase().includes(search));
+  if(bfs.size){
+    data=data.filter(p=>{
+      if(bfs.has('high')&&p.breach_pct>=10) return true;
+      if(bfs.has('mid')&&p.breach_pct>=5&&p.breach_pct<10) return true;
+      if(bfs.has('low')&&p.breach_pct<5) return true;
+      return false;
+    });
+  }
+
+  const _st_ph=SORT_STATE['ph'];
+  if(_st_ph){ data.sort((a,b)=>{ const av=a[_st_ph.col],bv=b[_st_ph.col]; if(typeof av==='string') return _st_ph.dir*(av||'').localeCompare(bv||''); return _st_ph.dir*((+bv||0)-(+av||0)); }); }
+  else { data.sort((a,b)=>b.breach_units-a.breach_units); }
+
+  const tu=data.reduce((a,p)=>a+p.total_units,0);
+  const bu=data.reduce((a,p)=>a+p.breach_units,0);
+  const ts=data.reduce((a,p)=>a+p.total_sellers,0);
+  const bs=data.reduce((a,p)=>a+p.breach_sellers_count,0);
+  set('ph-sum-count',fmt(data.length));
+  set('ph-sum-units',fmtN(tu));
+  set('ph-sum-bpct',tu>0?(bu/tu*100).toFixed(1)+'%':'0%');
+  set('ph-sum-bunits',fmtN(bu)+' units');
+  set('ph-sum-sellers',fmt(ts));
+  set('ph-sum-bsellers-pct',ts>0?((bs/ts)*100).toFixed(1)+'%':'0%');
+  set('ph-sum-bsellers',fmt(bs)+' sellers');
+
+  set('ph-count',`${data.length} PHs`);
+  _phData=data;
+  document.getElementById('tbody-ph').innerHTML=data.map(p=>`<tr>
+    <td>${p.ph}</td><td>${fmtN(p.total_units)}</td><td>${fmtN(p.breach_units)}</td>
+    <td>${pctBar(p.breach_pct)}</td><td>${fmtN(p.rbnd_units)}</td><td>${fmtN(p.reattempt_units)}</td>
+    <td>${fmtN(p.delay_units)}</td><td>${p.total_sellers}</td><td>${p.breach_sellers_count}</td>
+    <td>${pctBar(p.breach_sellers_pct)}</td></tr>`).join('');
+  renderBUSummary('ph-bu-tbody','ph-sc-filter');
+}
+
+// ══════════════════════════════════════════
+// DAILY
+// ══════════════════════════════════════════
+function renderDaily(){
+  const rows=sortDatesObjs(Object.values(DAILY_MAP));
+
+  // Summary
+  const tu=rows.reduce((a,r)=>a+r.total_units,0);
+  const bu=rows.reduce((a,r)=>a+r.breach_units,0);
+  const overallBpct=tu>0?(bu/tu*100).toFixed(2):0;
+  const peak=rows.reduce((a,r)=>r.breach_units>a.breach_units?r:a,{breach_units:0,date:'—'});
+  const rbnd=rows.reduce((a,r)=>a+r.rbnd,0);
+  const rbndPct=tu>0?(rbnd/tu*100).toFixed(2):0;
+  set('day-sum-days',fmt(rows.length));
+  set('day-sum-units',fmtN(tu));
+  set('day-sum-avgbpct',overallBpct+'%');
+  set('day-sum-bunits',fmtN(bu)+' units');
+  set('day-sum-peak',peak.date);
+  set('day-sum-rbnd-pct',rbndPct+'%');
+  set('day-sum-rbnd',fmtN(rbnd)+' units');
+  set('day-count',`${rows.length} days`);
+
+  destroyChart('chart-daily');
+  const ctx=document.getElementById('chart-daily').getContext('2d');
+  CHARTS['chart-daily']=new Chart(ctx,{type:'bar',data:{
+    labels:rows.map(r=>r.date),
+    datasets:[
+      {label:'Breach Units',data:rows.map(r=>r.breach_units),backgroundColor:'rgba(79,124,247,.65)',yAxisID:'y'},
+      {label:'Breach %',data:rows.map(r=>r.total_units>0?+(r.breach_units/r.total_units*100).toFixed(2):0),
+        type:'line',borderColor:'#e53935',backgroundColor:'transparent',pointRadius:3,yAxisID:'y1'}
+    ]
+  },options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{labels:{color:'#6b7280',font:{size:11}}}},
+    scales:{
+      x:{ticks:{color:'#6b7280',font:{size:10},maxRotation:60},grid:{color:'#dde1ee'}},
+      y:{ticks:{color:'#6b7280'},grid:{color:'#dde1ee'},title:{display:true,text:'Units',color:'#6b7280'}},
+      y1:{position:'right',ticks:{color:'#f7564f',callback:v=>v+'%'},grid:{display:false},title:{display:true,text:'Breach %',color:'#e53935'}}
+    }}});
+
+  destroyChart('chart-daily-type');
+  const ctx2=document.getElementById('chart-daily-type').getContext('2d');
+  CHARTS['chart-daily-type']=new Chart(ctx2,{type:'bar',data:{
+    labels:rows.map(r=>r.date),
+    datasets:[
+      {label:'RBND',data:rows.map(r=>r.rbnd),backgroundColor:'#f7564f',stack:'a'},
+      {label:'Reattempt',data:rows.map(r=>r.reattempt),backgroundColor:'#f79f4f',stack:'a'},
+      {label:'Delay',data:rows.map(r=>r.delay),backgroundColor:'#4f7cf7',stack:'a'}
+    ]
+  },options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{labels:{color:'#6b7280'}}},
+    scales:{x:{ticks:{color:'#6b7280',font:{size:10},maxRotation:60},grid:{color:'#dde1ee'},stacked:true},
+            y:{ticks:{color:'#6b7280'},grid:{color:'#dde1ee'},stacked:true}}}});
+
+  document.getElementById('tbody-daily').innerHTML=rows.map(r=>{
+    const pct=r.total_units>0?(r.breach_units/r.total_units*100).toFixed(2):0;
+    return `<tr><td>${r.date}</td><td>${r.week||'—'}</td><td>${fmtN(r.total_units)}</td><td>${fmtN(r.breach_units)}</td>
+      <td>${pctBar(parseFloat(pct))}</td><td>${fmtN(r.rbnd)}</td><td>${fmtN(r.reattempt)}</td><td>${fmtN(r.delay)}</td></tr>`;
+  }).join('');
+  renderBUSummary('day-bu-tbody','day-sc-filter');
+}
+
+// ══════════════════════════════════════════
+// CRITICAL
+// ══════════════════════════════════════════
+function renderCritical(){
+  let data=Object.values(SELLER_MAP).filter(s=>s.breach_units>0);
+  const search=document.getElementById('crit-search').value.toLowerCase();
+  const sevs=getMSVals('crit-sev');
+  const segs=getMSVals('crit-seg');
+
+  if(search) data=data.filter(s=>{ const m=smap(s.sid); return s.sid.toLowerCase().includes(search)||s.ph.toLowerCase().includes(search)||(m[0]||'').toLowerCase().includes(search); });
+  if(sevs.size){
+    data=data.filter(s=>{
+      if(sevs.has('high')&&s.breach_pct>30) return true;
+      if(sevs.has('medium')&&s.breach_pct>=10&&s.breach_pct<=30) return true;
+      if(sevs.has('low')&&s.breach_pct<10) return true;
+      return false;
+    });
+  }
+  if(segs.size){
+    data=data.filter(s=>{
+      if(segs.has('incubation')&&s.incubation) return true;
+      if(segs.has('low_drr')&&s.lowDRR) return true;
+      if(segs.has('cluster')&&s.isCluster) return true;
+      return false;
+    });
+  }
+
+  const _st_critical=SORT_STATE['critical'];
+  if(_st_critical){ smartSort(data,_st_critical.col,_st_critical.dir); }
+  else { smartSort(data,'breach_units',-1); }
+
+  const tu=data.reduce((a,s)=>a+s.total_units,0);
+  const bu=data.reduce((a,s)=>a+s.breach_units,0);
+  const avgBpct=data.length>0?(data.reduce((a,s)=>a+s.breach_pct,0)/data.length).toFixed(1):0;
+  const avgD=data.length>0?(data.reduce((a,s)=>a+s.breach_days,0)/data.length).toFixed(1):0;
+  const cl=data.filter(s=>s.isCluster).length;
+  set('crit-sum-count',fmt(data.length));
+  set('crit-sum-units',fmtN(tu));
+  set('crit-sum-bunits',fmtN(bu));
+  set('crit-sum-avgbpct',avgBpct+'%');
+  set('crit-sum-avgdays',avgD);
+  set('crit-sum-cluster',fmt(cl));
+
+  set('crit-count',`${data.length} sellers`);
+  _critData=data;
+  document.getElementById('tbody-critical').innerHTML=data.slice(0,300).map(s=>{
+    const sv=severity(s.breach_days,s.breach_pct);
+    const m=smap(s.sid);
+    return `<tr><td><code style="font-size:11px">${s.sid}</code></td>
+      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis" title="${m[0]}">${m[0]||'—'}</td>
+      <td>${m[1]||'—'}</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis">${m[2]||'—'}</td>
+      <td><span class="badge ${m[3]==='KAM'?'blue':'grey'}">${m[3]||'—'}</span></td>
+      <td>${s.ph}</td><td>${fmtN(s.total_units)}</td>
+      <td>${fmtN(s.breach_units)}</td><td>${pctBar(s.breach_pct)}</td><td>${s.breach_days}</td>
+      <td>${s.rbnd_days}</td><td>${s.reattempt_days}</td><td>${s.delay_days}</td>
+      <td>${sevBadge(sv)}</td><td>${tags(s)}</td></tr>`;
+  }).join('');
+  renderBUSummary('crit-bu-tbody','crit-sc-filter', data);
+}
+
+// ══════════════════════════════════════════
+// CLUSTER
+// ══════════════════════════════════════════
+function renderCluster(){
+  let data=Object.values(SELLER_MAP).filter(s=>s.isCluster);
+  const search=document.getElementById('cl-search').value.toLowerCase();
+  const phs=getMSVals('cl-ph');
+  const bfs=getMSVals('cl-breach');
+  const bts=getMSVals('cl-btype');
+  const ldrrs=getMSVals('cl-drr');
+  const incubs=getMSVals('cl-incub');
+  const sevs=getMSVals('cl-sev');
+  const issues=getMSVals('cl-issue');
+  const sortBy=document.getElementById('cl-sort').value;
+
+  if(search) data=data.filter(s=>{ const m=smap(s.sid); return s.sid.toLowerCase().includes(search)||(m[0]||'').toLowerCase().includes(search)||s.ph.toLowerCase().includes(search); });
+  if(phs.size) data=data.filter(s=>phs.has(s.ph));
+  if(bfs.size) data=data.filter(s=>bfs.has('breach')&&s.breach_units>0||bfs.has('no-breach')&&s.breach_units===0);
+  if(bts.size) data=data.filter(s=>{
+    if(bts.has('rbnd')&&s.rbnd_days>0) return true;
+    if(bts.has('reattempt')&&s.reattempt_days>0) return true;
+    if(bts.has('delay')&&s.delay_days>0) return true;
+    return false;
+  });
+  if(ldrrs.size) data=data.filter(s=>ldrrs.has('yes')&&s.lowDRR||ldrrs.has('no')&&!s.lowDRR);
+  if(incubs.size) data=data.filter(s=>incubs.has('yes')&&s.incubation||incubs.has('no')&&!s.incubation);
+  if(sevs.size) data=data.filter(s=>{
+    if(sevs.has('critical')&&s.breach_days>=15) return true;
+    if(sevs.has('moderate')&&s.breach_days>=8&&s.breach_days<15) return true;
+    if(sevs.has('low')&&s.breach_days>=1&&s.breach_days<8) return true;
+    if(sevs.has('none')&&s.breach_days===0) return true;
+    return false;
+  });
+  if(issues.size) data=data.filter(s=>issues.has('seller')&&s.issueType.includes('seller')||issues.has('ekart')&&s.issueType.includes('ekart'));
+
+  const _st_cluster=SORT_STATE['cluster'];
+  if(_st_cluster){ smartSort(data,_st_cluster.col,_st_cluster.dir); }
+  else { smartSort(data,'breach_units',-1); }
+
+  // Summary
+  const total=data.length;
+  const withBreach=data.filter(s=>s.breach_units>0).length;
+  const tu=data.reduce((a,s)=>a+s.total_units,0);
+  const bu=data.reduce((a,s)=>a+s.breach_units,0);
+  const bpct=tu>0?(bu/tu*100).toFixed(1):0;
+  const avgD=total>0?(data.reduce((a,s)=>a+s.breach_days,0)/total).toFixed(1):0;
+  const lowDRRct=data.filter(s=>s.lowDRR).length;
+  const incubCt=data.filter(s=>s.incubation).length;
+  set('cl-sum-count',fmt(total));
+  set('cl-sum-breach',fmt(withBreach));
+  set('cl-sum-breach-pct',total>0?((withBreach/total)*100).toFixed(1)+'% of cluster':'');
+  set('cl-sum-units',fmtN(tu));
+  set('cl-sum-bunits',fmtN(bu));
+  set('cl-sum-bpct',bpct+'%');
+  set('cl-sum-avgdays',avgD);
+  set('cl-sum-lowdrr',fmt(lowDRRct));
+  set('cl-sum-incub',fmt(incubCt));
+
+  set('cl-count',`${total} cluster sellers`);
+  _clData=data;
+  const tbody=document.getElementById('tbody-cluster');
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="14" class="empty">No cluster sellers match</td></tr>`;return;}
+  tbody.innerHTML=data.map(s=>{
+    const sv=severity(s.breach_days,s.breach_pct);
+    const m=smap(s.sid);
+    return `<tr><td><code style="font-size:11px">${s.sid}</code></td>
+      <td style="max-width:130px;overflow:hidden;text-overflow:ellipsis" title="${m[0]}">${m[0]||'—'}</td>
+      <td>${m[1]||'—'}</td><td style="max-width:100px;overflow:hidden;text-overflow:ellipsis">${m[2]||'—'}</td>
+      <td><span class="badge ${m[3]==='KAM'?'blue':'grey'}">${m[3]||'—'}</span></td>
+      <td style="max-width:110px;overflow:hidden;text-overflow:ellipsis" title="${m[4]}">${m[4]||'—'}</td>
+      <td>${s.ph}</td><td>${fmtN(s.total_units)}</td><td>${fmtN(s.breach_units)}</td>
+      <td>${pctBar(s.breach_pct)}</td><td>${s.breach_days}</td>
+      <td>${s.rbnd_days}</td><td>${s.reattempt_days}</td><td>${s.delay_days}</td>
+      <td>${s.lowDRR?'<span class="badge orange">Low DRR</span>':'—'}</td>
+      <td>${s.incubation?'<span class="badge purple">Incubation</span>':'—'}</td>
+      <td>${sevBadge(sv)}</td></tr>`;
+  }).join('');
+  renderBUSummary('cl-bu-tbody','cl-sc-filter', data);
+  // Refresh AM table with current filtered data
+  setTimeout(()=>renderAMTable(), 50);
+}
+
+function clearClusterFilters(){
+  document.getElementById('cl-search').value='';
+  ['cl-ph','cl-breach','cl-btype','cl-drr','cl-incub','cl-sev','cl-issue'].forEach(id=>clearMS(id));
+  renderCluster();
+}
+
+// ══════════════════════════════════════════
+// GITHUB
+// ══════════════════════════════════════════
+function openGHPanel(){document.getElementById('gh-panel').classList.add('open');}
+function closeGHPanel(){document.getElementById('gh-panel').classList.remove('open');}
+
+async function saveGHConfig(){
+  GH={user:document.getElementById('gh-user').value.trim(),repo:document.getElementById('gh-repo').value.trim(),
+      branch:document.getElementById('gh-branch').value.trim()||'main',pat:document.getElementById('gh-pat').value.trim()};
+  if(!GH.user||!GH.repo){document.getElementById('gh-test-result').textContent='⚠ Fill in username and repo';return;}
+  localStorage.setItem('pickup_gh_cfg',JSON.stringify(GH));
+  const res=document.getElementById('gh-test-result');
+  res.textContent='Testing…';
+  try{
+    const headers={};
+    if(GH.pat) headers['Authorization']='token '+GH.pat;
+    const r=await fetch(`https://api.github.com/repos/${GH.user}/${GH.repo}`,{headers});
+    if(r.ok){res.style.color='var(--green)';res.textContent='✅ Connected!';setGHDot('ok');if(GH.pat)document.getElementById('btn-publish').style.display='';}
+    else{res.style.color='var(--red)';res.textContent=`❌ ${r.status}: ${r.statusText}`;setGHDot('err');}
+  }catch(e){res.style.color='var(--red)';res.textContent='❌ '+e.message;setGHDot('err');}
+}
+
+async function publishToGH(){
+  if(!GH.pat){showToast('PAT required to publish','err');return;}
+  showToast('Publishing…','');
+  try{
+    const payload=buildExportPayload();
+    const jsonStr=JSON.stringify(payload);
+    // Check size
+    const kb=jsonStr.length/1024;
+    if(kb>90000){showToast('Data too large to publish (>90MB). Try filtering first.','err');return;}
+    const content=btoa(unescape(encodeURIComponent(jsonStr)));
+    const url=`https://api.github.com/repos/${GH.user}/${GH.repo}/contents/dashboard-data.json`;
+    const headers={'Authorization':'token '+GH.pat,'Content-Type':'application/json'};
+    // Always get fresh sha
+    let sha;
+    try{
+      const ex=await fetch(url,{headers,cache:'no-store'});
+      if(ex.ok){const d=await ex.json();sha=d.sha;}
+    }catch(e){}
+    const body={message:'Update pickup data '+new Date().toISOString(),content,branch:GH.branch||'main'};
+    if(sha) body.sha=sha;
+    const r=await fetch(url,{method:'PUT',headers,body:JSON.stringify(body)});
+    if(r.ok){
+      showToast('✅ Published! Everyone sees updates on refresh.','ok');
+    } else {
+      const err=await r.json();
+      showToast('❌ '+(err.message||'Publish failed'),'err');
+    }
+  }catch(e){showToast('❌ Error: '+e.message,'err');}
+}
+
+// ══════════════════════════════════════════
+// EXPORT / IMPORT
+// ══════════════════════════════════════════
+function buildExportPayload(){
+  // Build ekart data if not already built
+  if(!EKART_DATA.length && RAW.length) buildEkartData();
+  const sellers = Object.values(SELLER_MAP).map(s=>[
+    s.sid, s.ph, s.total_units, s.breach_units,
+    s.breach_days, s.rbnd_days, s.reattempt_days, s.delay_days,
+    s.total_days, s.high_pct_days,
+    s.incubation?1:0, s.lowDRR?1:0, s.isCluster?1:0, s.issueType
+  ]);
+  const phs = Object.values(PH_MAP).map(p=>[
+    p.ph, p.total_units, p.breach_units,
+    p.rbnd_units, p.reattempt_units, p.delay_units,
+    p.total_sellers, p.breach_sellers_count
+  ]);
+  const daily = Object.values(DAILY_MAP).map(d=>[
+    d.date, d.week, d.total_units, d.breach_units, d.rbnd, d.reattempt, d.delay
+  ]);
+  // Compact ekart data
+  const ekart = EKART_DATA.map(e=>[e.sid,e.ph,e.bu,e.sc,e.owner,e.am,e.name,e.units,e.days,e.dates,e.weeks]);
+  return {
+    v:4,
+    exportedAt:new Date().toISOString(),
+    sellers, phs, daily, ekart,
+    clusterIds:[...CLUSTER_IDS]
+  };
+}
+
+function ingestCompressed(data){
+  SELLER_MAP={};
+  (data.sellers||[]).forEach(s=>{
+    const sid=s[0];
+    SELLER_MAP[sid]={
+      sid, ph:s[1]||'', total_units:+s[2]||0, breach_units:+s[3]||0,
+      breach_days:+s[4]||0, rbnd_days:+s[5]||0, reattempt_days:+s[6]||0, delay_days:+s[7]||0,
+      total_days:+s[8]||0, high_pct_days:+s[9]||0,
+      incubation:!!s[10], lowDRR:!!s[11], isCluster:!!s[12], issueType:s[13]||'',
+      drr_days:0, drr_units:0,
+      breach_pct: (+s[2]>0)?(+s[3]/+s[2]*100):0
+    };
+  });
+  PH_MAP={};
+  (data.phs||[]).forEach(p=>{
+    PH_MAP[p[0]]={
+      ph:p[0], total_units:+p[1]||0, breach_units:+p[2]||0,
+      rbnd_units:+p[3]||0, reattempt_units:+p[4]||0, delay_units:+p[5]||0,
+      total_sellers:+p[6]||0, breach_sellers_count:+p[7]||0,
+      breach_pct:(+p[1]>0)?(+p[2]/+p[1]*100):0,
+      breach_sellers_pct:(+p[6]>0)?(+p[7]/+p[6]*100):0
+    };
+  });
+  DAILY_MAP={};
+  (data.daily||[]).forEach(d=>{
+    DAILY_MAP[d[0]]={date:d[0],week:d[1],total_units:+d[2]||0,breach_units:+d[3]||0,rbnd:+d[4]||0,reattempt:+d[5]||0,delay:+d[6]||0};
+  });
+  CLUSTER_IDS=new Set(data.clusterIds||[]);
+  // Restore ekart data if available
+  EKART_DATA=[];
+  (data.ekart||[]).forEach(e=>{
+    EKART_DATA.push({sid:e[0],ph:e[1],bu:e[2],sc:e[3],owner:e[4],am:e[5],name:e[6],units:e[7],days:e[8],dates:e[9]||[],weeks:e[10]||[]});
+  });
+  RAW=[]; FILTERED=[];
+}
+function exportJSON(){
+  const blob=new Blob([JSON.stringify(buildExportPayload(),null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='pickup-scorecard-'+new Date().toISOString().slice(0,10)+'.json';a.click();
+}
+function loadJSON(file){
+  const r=new FileReader();
+  r.onload=e=>{try{ingestJSON(JSON.parse(e.target.result));}catch(err){showToast('Invalid JSON','err');}};
+  r.readAsText(file);
+}
+function ingestJSON(data){
+  if(data.v===4){
+    ingestCompressed(data);
+  } else {
+    SELLER_MAP=data.sellerMap||{};
+    PH_MAP=data.phMap||{};
+    DAILY_MAP=data.dailyMap||{};
+    CLUSTER_IDS=new Set(data.clusterIds||[]);
+    DATE_WEEK_MAP=data.dateWeekMap||{};
+    RAW=[]; FILTERED=[];
+    Object.values(SELLER_MAP).forEach(s=>{
+      if(!s.breach_pct) s.breach_pct=s.total_units>0?(s.breach_units/s.total_units*100):0;
+    });
+    Object.values(PH_MAP).forEach(p=>{
+      if(!p.breach_pct) p.breach_pct=p.total_units>0?(p.breach_units/p.total_units*100):0;
+      if(!p.breach_sellers_pct) p.breach_sellers_pct=p.total_sellers>0?(p.breach_sellers_count/p.total_sellers*100):0;
+    });
+  }
+  buildDashboard(true);
+}
+
+// ══════════════════════════════════════════
+// CSV DOWNLOAD
+// ══════════════════════════════════════════
+function downloadCSV(type){
+  let hdrs,rows;
+  if(type==='sellers'){
+    hdrs=['seller_id','ph','total_units','breach_units','breach_pct','breach_days','rbnd_days','reattempt_days','delay_days','high_pct_days','severity','cluster','incubation','low_drr'];
+    rows=_selData.map(s=>[s.sid,s.ph,s.total_units,s.breach_units,s.breach_pct.toFixed(2),s.breach_days,s.rbnd_days,s.reattempt_days,s.delay_days,s.high_pct_days,severity(s.breach_days,s.breach_pct),s.isCluster?'Yes':'',s.incubation?'Yes':'',s.lowDRR?'Yes':'']);
+  }else if(type==='ph'){
+    hdrs=['ph','total_units','breach_units','breach_pct','rbnd_units','reattempt_units','delay_units','total_sellers','breach_sellers','breach_sellers_pct'];
+    rows=_phData.map(p=>[p.ph,p.total_units,p.breach_units,p.breach_pct.toFixed(2),p.rbnd_units,p.reattempt_units,p.delay_units,p.total_sellers,p.breach_sellers_count,p.breach_sellers_pct.toFixed(2)]);
+  }else if(type==='critical'){
+    hdrs=['seller_id','ph','total_units','breach_units','breach_pct','breach_days'];
+    rows=_critData.map(s=>[s.sid,s.ph,s.total_units,s.breach_units,s.breach_pct.toFixed(2),s.breach_days]);
+  } else if(type==='am'){
+    hdrs=['am','total_sellers','breach_sellers','breach_seller_pct','total_units','breach_units','breach_pct','avg_breach_days'];
+    rows=(_amData||[]).map(a=>[a.am,a.total_sellers,a.breach_sellers,a.breach_seller_pct.toFixed(1),a.total_units,a.breach_units,a.breach_pct.toFixed(1),a.avg_breach_days.toFixed(1)]);
+  }
+    hdrs=['seller_id','ph','total_units','breach_units','breach_pct','breach_days','rbnd_days','reattempt_days','delay_days','low_drr','incubation','issue_type','severity'];
+    rows=_clData.map(s=>[s.sid,s.ph,s.total_units,s.breach_units,s.breach_pct.toFixed(2),s.breach_days,s.rbnd_days,s.reattempt_days,s.delay_days,s.lowDRR?'Yes':'',s.incubation?'Yes':'',s.issueType,severity(s.breach_days,s.breach_pct)]);
+  }
+  const csv=[hdrs,...rows].map(r=>r.join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=type+'-data.csv';a.click();
+}
+
+// ══════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════
+function switchTab(name){
+  document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('nav a').forEach(el=>el.classList.remove('active'));
+  const tabEl=document.getElementById('tab-'+name);
+  if(tabEl) tabEl.classList.add('active');
+  const navEl=document.querySelector(`nav a[data-tab="${name}"]`);
+  if(navEl) navEl.classList.add('active');
+  // Only re-render if dashboard is already built (not during initial build)
+  if(document.getElementById('dashboard').style.display!=='none' && SELLER_MAP && Object.keys(SELLER_MAP).length>0){
+    setTimeout(()=>refreshCurrentTab(), 50);
+  }
+}
+
+function resetDashboard(){
+  RAW=[];FILTERED=[];SELLER_MAP={};PH_MAP={};DAILY_MAP={};CLUSTER_IDS=new Set();
+  Object.values(CHARTS).forEach(c=>c.destroy());CHARTS={};
+  document.getElementById('upload-screen').style.display='';
+  document.getElementById('dashboard').style.display='none';
+  document.getElementById('sidebar').style.display='none';
+  ['btn-export','btn-reset','btn-upload-hdr','btn-publish'].forEach(id=>document.getElementById(id).style.display='none');
+  document.getElementById('upload-progress').style.display='none';
+  document.getElementById('upload-status').textContent='';
+}
+
+function setUploadStatus(msg,pct){
+  const el=document.getElementById('upload-status');
+  if(el) el.textContent=msg;
+  const prog=document.getElementById('upload-progress');
+  if(pct>0&&pct<100){if(prog) prog.style.display='';document.getElementById('upload-progress-fill').style.width=pct+'%';}
+  else if(pct>=100&&(!msg||!msg.startsWith('❌'))) setTimeout(()=>{if(prog) prog.style.display='none';},600);
+}
+function setGHDot(state){
+  const dot=document.getElementById('gh-status-dot');
+  dot.className='gh-dot'+(state?' '+state:'');
+  dot.title=state==='ok'?'GitHub connected':state==='err'?'GitHub error':'Not configured';
+}
+function showToast(msg,type){
+  const t=document.getElementById('toast');t.textContent=msg;t.className=type;t.style.display='block';
+  clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',3500);
+}
+function set(id,val){const el=document.getElementById(id);if(el)el.textContent=val;}
+function fmt(n){return n.toLocaleString('en-IN');}
+function fmtN(n){if(n>=1e7)return(n/1e7).toFixed(1)+'Cr';if(n>=1e5)return(n/1e5).toFixed(1)+'L';if(n>=1000)return(n/1000).toFixed(1)+'K';return n;}
+function pctBar(pct){
+  const cls=pct>=15?'high':pct>=5?'mid':'';
+  return `${pct.toFixed(1)}% <span class="pct-bar"><span class="pct-fill ${cls}" style="width:${Math.min(pct,100)}%"></span></span>`;
+}
+function severity(bd,bp){
+  if(bd>=15||bp>30)return'critical';if(bd>=8||bp>=10)return'moderate';if(bd>=1)return'low';return'none';
+}
+function sevBadge(sv){
+  const m={critical:['red','Critical'],moderate:['orange','Moderate'],low:['blue','Low'],none:['grey','None']};
+  const[cls,label]=m[sv]||['grey','None'];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+function tags(s){
+  let t='';
+  if(s.isCluster) t+='<span class="badge green">Cluster</span> ';
+  if(s.incubation) t+='<span class="badge purple">Incubation</span> ';
+  if(s.lowDRR) t+='<span class="badge orange">Low DRR</span> ';
+  return t||'—';
+}
+const MONTHS={Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
+function parseDateOrd(s){const[d,m]=s.split('-');return(MONTHS[m]||0)*100+parseInt(d);}
+function sortDates(arr){return arr.sort((a,b)=>parseDateOrd(a)-parseDateOrd(b));}
+function sortDatesObjs(arr){return arr.sort((a,b)=>parseDateOrd(a.date)-parseDateOrd(b.date));}
+
+// Seller mapping helper: [name, bu, sc, owner, am]
+function smap(sid){return SELLER_MAPPING[sid]||['','','','',''];}
+
+let BU_MAP = {};   // bu -> {total_units, breach_units, rbnd, reattempt, delay, sellers:Set, breach_sellers:Set, sc:{}}
+
+// ══════════════════════════════════════════
+// BU / SC AGGREGATION
+// ══════════════════════════════════════════
+function aggregateBU(sellerSubset){
+  // sellerSubset: array of seller objects from SELLER_MAP (or all if null)
+  // We re-aggregate from FILTERED rows for the given seller IDs
+  const allowedSids = sellerSubset ? new Set(sellerSubset.map(s=>s.sid)) : null;
+  const buMap = {};
+
+  FILTERED.forEach(row=>{
+    const sid = row['seller_id']||'';
+    if(allowedSids && !allowedSids.has(sid)) return;
+    const isCancelled=(row['Overall_Status']||'')==='Cancellation_and_returns';
+    if(isCancelled) return;
+    const embargo=(row['Embargo']||'').toLowerCase()==='embargo';
+    if(embargo) return;
+    const units=parseFloat(row['Sum of units'])||0;
+    const breach=row['DBD Breach']||'-';
+    const isB=breach!=='-'&&breach!=='';
+    const m=smap(sid);
+    const bu=m[1]||'(Unmapped)';
+    const sc=m[2]||'(Unmapped)';
+
+    if(!buMap[bu]) buMap[bu]={bu,total_units:0,breach_units:0,rbnd:0,reattempt:0,delay:0,sellers:new Set(),breach_sellers:new Set(),sc:{}};
+    const b=buMap[bu];
+    b.total_units+=units; b.sellers.add(sid);
+    if(isB){ b.breach_units+=units; b.breach_sellers.add(sid);
+      if(breach==='RBND Breach') b.rbnd+=units;
+      if(breach==='Reattempt Breach') b.reattempt+=units;
+      if(breach==='Delay dispatch'||breach==='Delay Dispatch') b.delay+=units;
+    }
+    if(!b.sc[sc]) b.sc[sc]={sc,total_units:0,breach_units:0,rbnd:0,reattempt:0,delay:0,sellers:new Set(),breach_sellers:new Set()};
+    const s2=b.sc[sc];
+    s2.total_units+=units; s2.sellers.add(sid);
+    if(isB){ s2.breach_units+=units; s2.breach_sellers.add(sid);
+      if(breach==='RBND Breach') s2.rbnd+=units;
+      if(breach==='Reattempt Breach') s2.reattempt+=units;
+      if(breach==='Delay dispatch'||breach==='Delay Dispatch') s2.delay+=units;
+    }
+  });
+
+  // Finalize
+  Object.values(buMap).forEach(b=>{
+    b.total_sellers=b.sellers.size; b.breach_seller_count=b.breach_sellers.size;
+    b.breach_pct=b.total_units>0?(b.breach_units/b.total_units*100):0;
+    b.breach_sellers_pct=b.total_sellers>0?(b.breach_seller_count/b.total_sellers*100):0;
+    delete b.sellers; delete b.breach_sellers;
+    Object.values(b.sc).forEach(s2=>{
+      s2.total_sellers=s2.sellers.size; s2.breach_seller_count=s2.breach_sellers.size;
+      s2.breach_pct=s2.total_units>0?(s2.breach_units/s2.total_units*100):0;
+      s2.breach_sellers_pct=s2.total_sellers>0?(s2.breach_seller_count/s2.total_sellers*100):0;
+      delete s2.sellers; delete s2.breach_sellers;
+    });
+  });
+  return buMap;
+}
+
+function renderBUSummary(tbodyId, scFilterId, sellerSubset){
+  const buMap = aggregateBU(sellerSubset||null);
+  const scFilter = document.getElementById(scFilterId)?.value||'';
+
+  // Populate SC dropdown
+  const allSCs = [...new Set(Object.values(buMap).flatMap(b=>Object.keys(b.sc)))].sort();
+  const scEl = document.getElementById(scFilterId);
+  if(scEl && scEl.options.length<=1){
+    scEl.innerHTML='<option value="">All SCs</option>'+allSCs.map(s=>`<option value="${s}">${s}</option>`).join('');
+  }
+
+  const rows = Object.values(buMap).sort((a,b)=>b.breach_units-a.breach_units);
+  const tbody = document.getElementById(tbodyId);
+  if(!tbody) return;
+
+  tbody.innerHTML = rows.map((b,i)=>{
+    const bpctCls=b.breach_pct>=15?'red':b.breach_pct>=5?'orange':'green';
+    // SC rows filtered
+    const scRows = Object.values(b.sc)
+      .filter(s=>!scFilter||s.sc===scFilter)
+      .sort((a,c)=>c.breach_units-a.breach_units);
+
+    const scTbodyId=`sc-${tbodyId}-${i}`;
+    const scHTML = scRows.map(s=>`<tr class="sc-row">
+      <td></td><td>↳ ${s.sc}</td>
+      <td>${fmtN(s.total_units)}</td><td>${fmtN(s.breach_units)}</td>
+      <td><span style="color:${s.breach_pct>=15?'var(--red)':s.breach_pct>=5?'var(--orange)':'var(--green)'}">${s.breach_pct.toFixed(1)}%</span></td>
+      <td>${fmtN(s.rbnd)}</td><td>${fmtN(s.reattempt)}</td><td>${fmtN(s.delay)}</td>
+      <td>${s.total_sellers}</td><td>${s.breach_seller_count}</td>
+      <td>${s.breach_sellers_pct.toFixed(1)}%</td>
+    </tr>`).join('');
+
+    return `<tr>
+      <td><button class="bu-expand-btn" onclick="toggleSCRows('${scTbodyId}',this)">▶ SC</button></td>
+      <td><strong>${b.bu}</strong></td>
+      <td>${fmtN(b.total_units)}</td>
+      <td>${fmtN(b.breach_units)}</td>
+      <td><span style="color:var(--${bpctCls})">${b.breach_pct.toFixed(1)}%</span></td>
+      <td>${fmtN(b.rbnd)}</td><td>${fmtN(b.reattempt)}</td><td>${fmtN(b.delay)}</td>
+      <td>${b.total_sellers}</td><td>${b.breach_seller_count}</td>
+      <td>${b.breach_sellers_pct.toFixed(1)}%</td>
+    </tr>
+    <tr><td colspan="11" style="padding:0;border:none">
+      <table style="width:100%;border-collapse:collapse" id="${scTbodyId}" class="sc-rows">${scHTML}</table>
+    </td></tr>`;
+  }).join('');
+}
+
+function toggleSCRows(tbodyId, btn){
+  const el=document.getElementById(tbodyId);
+  if(!el) return;
+  const open=el.classList.toggle('open');
+  btn.textContent=open?'▼ SC':'▶ SC';
+}
+
+// ══════════════════════════════════════════
+// MULTI-SELECT ENGINE
+// ══════════════════════════════════════════
+const MS_STATE = {}; // id -> Set of selected values
+
+function createMS(containerId, id, label, options, onChange){
+  // options: [{v, l}] or string[]
+  const opts = options.map(o => typeof o==='string' ? {v:o,l:o} : o);
+  MS_STATE[id] = new Set();
+  const wrap = document.getElementById(containerId);
+  if(!wrap) return;
+  wrap.innerHTML = `
+    <div class="ms-trigger" id="${id}-trigger" onclick="toggleMS('${id}',event)">${label}</div>
+    <div class="ms-dropdown" id="${id}-dd">
+      <div class="ms-search"><input placeholder="Search…" oninput="filterMSList('${id}',this.value)" onclick="event.stopPropagation()"></div>
+      <div class="ms-actions">
+        <span onclick="selectAllMS('${id}')">All</span>
+        <span onclick="clearMS('${id}')">None</span>
+      </div>
+      <div class="ms-list" id="${id}-list">
+        ${opts.map(o=>`<div class="ms-item" data-val="${o.v}">
+          <input type="checkbox" id="ms-${id}-${o.v.replace(/\s/g,'_')}" value="${o.v}" onchange="toggleMSItem('${id}','${o.v}',this.checked,()=>${onChange})">
+          <label for="ms-${id}-${o.v.replace(/\s/g,'_')}">${o.l}</label>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  // Store opts reference
+  wrap._msopts = opts;
+  wrap._onchange = onChange;
+}
+
+function toggleMS(id, e){
+  e.stopPropagation();
+  const dd = document.getElementById(id+'-dd');
+  const isOpen = dd.classList.contains('open');
+  // Close all others
+  document.querySelectorAll('.ms-dropdown.open').forEach(el=>el.classList.remove('open'));
+  document.querySelectorAll('.ms-trigger.active').forEach(el=>el.classList.remove('active'));
+  if(!isOpen){
+    dd.classList.add('open');
+    document.getElementById(id+'-trigger').classList.add('active');
+  }
+}
+
+document.addEventListener('click', ()=>{
+  document.querySelectorAll('.ms-dropdown.open').forEach(el=>el.classList.remove('open'));
+  document.querySelectorAll('.ms-trigger.active').forEach(el=>el.classList.remove('active'));
+});
+
+function toggleMSItem(id, val, checked, cb){
+  if(checked) MS_STATE[id].add(val);
+  else MS_STATE[id].delete(val);
+  updateMSTrigger(id);
+  cb();
+}
+
+function selectAllMS(id){
+  const list = document.getElementById(id+'-list');
+  list.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+    cb.checked=true; MS_STATE[id].add(cb.value);
+  });
+  updateMSTrigger(id); triggerMSChange(id);
+}
+
+function clearMS(id){
+  const list = document.getElementById(id+'-list');
+  list.querySelectorAll('input[type=checkbox]').forEach(cb=>{ cb.checked=false; });
+  MS_STATE[id]=new Set();
+  updateMSTrigger(id); triggerMSChange(id);
+}
+
+function filterMSList(id, q){
+  const list = document.getElementById(id+'-list');
+  const lq = q.toLowerCase();
+  list.querySelectorAll('.ms-item').forEach(item=>{
+    const v = item.dataset.val.toLowerCase();
+    item.style.display = v.includes(lq) ? '' : 'none';
+  });
+}
+
+function updateMSTrigger(id){
+  const sel = MS_STATE[id];
+  const trigger = document.getElementById(id+'-trigger');
+  if(!trigger) return;
+  const label = trigger.dataset.label || trigger.textContent.replace(/\s*\d+$/, '').trim();
+  trigger.dataset.label = label;
+  if(sel.size === 0){
+    trigger.innerHTML = label;
+  } else {
+    trigger.innerHTML = `${label} <span class="ms-badge">${sel.size}</span>`;
+  }
+}
+
+function triggerMSChange(id){
+  // Find the wrap and call its onchange
+  const wrap = document.querySelector(`[id$="${id}-wrap"]`);
+  if(wrap && wrap._onchange) wrap._onchange();
+}
+
+function getMSVals(id){ return MS_STATE[id] || new Set(); }
+function msActive(id){ return (MS_STATE[id]||new Set()).size > 0; }
+
+// ══════════════════════════════════════════
+// SORT TABLE (click header)
+// ══════════════════════════════════════════
+const SORT_STATE = {}; // tab -> {col, dir}
+
+
+function updateSortHeaders(tab, col, dir){
+  const tbl = document.getElementById('tbl-'+tab);
+  if(!tbl) return;
+  tbl.querySelectorAll('th[onclick]').forEach(th=>{
+    th.classList.remove('sorted-asc','sorted-desc');
+    const fn = th.getAttribute('onclick')||'';
+    const m = fn.match(/sortTable\('[^']+','([^']+)'\)/);
+    if(m && m[1]===col) th.classList.add(dir===-1?'sorted-desc':'sorted-asc');
+  });
+}
+function smartSort(data, col, dir){
+  // columns that live in seller mapping, not in seller object
+  const mapCols={name:0,bu:1,sc:2,owner:3,am:4};
+  return data.sort((a,b)=>{
+    let av,bv;
+    if(mapCols[col]!==undefined){
+      av=smap(a.sid)[mapCols[col]]||'';
+      bv=smap(b.sid)[mapCols[col]]||'';
+    } else {
+      av=a[col]; bv=b[col];
+    }
+    if(typeof av==='string'||isNaN(av)) return dir*(String(av||'')).localeCompare(String(bv||''));
+    return dir*((+bv||0)-(+av||0));
+  });
+}
+function sortTable(tab, col){
+  if(!SORT_STATE[tab]) SORT_STATE[tab]={col,dir:-1};
+  const st=SORT_STATE[tab];
+  st.dir = (st.col===col) ? -st.dir : -1;
+  st.col=col;
+  updateSortHeaders(tab, st.col, st.dir);
+  if(tab==='sellers') renderSellers();
+  else if(tab==='ph') renderPH();
+  else if(tab==='critical') renderCritical();
+  else if(tab==='cluster') renderCluster();
+  else if(tab==='ekart') renderEkart();
+}
+
+function getSort(tab, defaultCol){
+  const st=SORT_STATE[tab];
+  return st ? {col:st.col, dir:st.dir} : {col:defaultCol, dir:-1};
+}
+
+function sortData(data, tab, defaultCol, mapFn){
+  const {col,dir}=getSort(tab,defaultCol);
+  return data.sort((a,b)=>{
+    const av=mapFn?mapFn(a,col):a[col];
+    const bv=mapFn?mapFn(b,col):b[col];
+    if(typeof av==='string') return dir*(av||'').localeCompare(bv||'');
+    return dir*((bv||0)-(av||0));
+  });
+}
+
+// ══════════════════════════════════════════
+// EKART ISSUES TAB
+// ══════════════════════════════════════════
+let EKART_DATA = []; // aggregated per seller
+let _ekData = [];
+
+function buildEkartData(){
+  EKART_DATA=[];
+  if(!RAW.length) return;
+  const sellerMap={};
+  RAW.forEach(row=>{
+    if((row['fulfill_item_unit_status']||'').toLowerCase().trim()!=='dispatched') return;
+    const mp=(row['mp_status']||'').toLowerCase().trim();
+    if(!['(blank)','created','out_for_pickup'].includes(mp)) return;
+    if((row['issue_type']||'').toLowerCase().trim()!=='ekart issue') return;
+    const rtd=String(row['rtd breach']||'false').toLowerCase().trim();
+    if(rtd==='true'||rtd==='1') return;
+    const flag=(row['seller_holiday_flag']||'').trim();
+    if(flag!=='(blank)'&&flag!=='') return;
+    const ldrr=(row['Low_DRR_Status']||'').trim();
+    if(!['Low DRR','Low_DRR Seller','Low DRR Seller'].includes(ldrr)) return;
+    const sid=row['seller_id']||'';
+    const ph=row['large_ph_name']||'';
+    const date=row['dispatch_expected_date']||'';
+    const week=String(row['Week num']||'');
+    const units=parseFloat(row['Sum of units'])||0;
+    const m=smap(sid);
+    if(!sellerMap[sid]) sellerMap[sid]={sid,ph,bu:m[1]||'',sc:m[2]||'',owner:m[3]||'',am:m[4]||'',name:m[0]||'',units:0,dates:new Set(),weeks:new Set()};
+    sellerMap[sid].units+=units;
+    sellerMap[sid].dates.add(date);
+    sellerMap[sid].weeks.add(week);
+  });
+  EKART_DATA=Object.values(sellerMap).map(s=>({...s,days:s.dates.size,dates:[...s.dates],weeks:[...s.weeks]}));
+}
+
+function renderEkart(){
+  if(!EKART_DATA.length && RAW.length) buildEkartData();
+  let data=[...EKART_DATA];
+
+  const search=document.getElementById('ek-search')?.value.toLowerCase()||'';
+  const phs=getMSVals('ek-ph');
+  const weeks=getMSVals('ek-week');
+
+  if(search) data=data.filter(s=>s.sid.toLowerCase().includes(search)||(s.name||'').toLowerCase().includes(search));
+  if(phs.size) data=data.filter(s=>phs.has(s.ph));
+  if(weeks.size) data=data.filter(s=>s.weeks.some(w=>weeks.has(String(w))));
+
+  // Sort
+  const {col,dir}=getSort('ekart','units');
+  data.sort((a,b)=>{
+    const av=a[col]; const bv=b[col];
+    if(typeof av==='string') return dir*(av||'').localeCompare(bv||'');
+    return dir*((bv||0)-(av||0));
+  });
+
+  // Summary
+  const totalUnits=data.reduce((a,s)=>a+s.units,0);
+  const allDates=new Set(data.flatMap(s=>s.dates));
+  const allPHs=new Set(data.map(s=>s.ph));
+  const allBUs=new Set(data.map(s=>s.bu).filter(Boolean));
+  set('ek-sum-sellers',fmt(data.length));
+  set('ek-sum-units',fmtN(totalUnits));
+  set('ek-sum-days',fmt(allDates.size));
+  set('ek-sum-phs',fmt(allPHs.size));
+  set('ek-sum-bus',fmt(allBUs.size));
+  set('ek-count',`${data.length} sellers`);
+
+  _ekData=data;
+  renderEkartWeekSummary(data);
+
+  const tbody=document.getElementById('tbody-ekart');
+  if(!tbody) return;
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="8" class="empty">No sellers match</td></tr>`;return;}
+  tbody.innerHTML=data.map(s=>`<tr>
+    <td><code style="font-size:11px">${s.sid}</code></td>
+    <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="${s.name}">${s.name||'—'}</td>
+    <td>${s.bu||'—'}</td>
+    <td style="max-width:100px;overflow:hidden;text-overflow:ellipsis">${s.sc||'—'}</td>
+    <td><span class="badge ${s.owner==='KAM'?'blue':'grey'}">${s.owner||'—'}</span></td>
+    <td>${s.ph}</td>
+    <td>${fmtN(s.units)}</td>
+    <td>${s.days}</td>
+  </tr>`).join('');
+}
+
+function renderEkartWeekSummary(data){
+  data=data||_ekData;
+  const groupBy=document.getElementById('ek-week-group')?.value||'week';
+  const grpMap={};
+
+  data.forEach(s=>{
+    const keys = groupBy==='week' ? s.weeks :
+                 groupBy==='bu'   ? [s.bu||'(Unmapped)'] :
+                 groupBy==='sc'   ? [s.sc||'(Unmapped)'] : [s.ph||'(Unmapped)'];
+    keys.forEach(k=>{
+      if(!grpMap[k]) grpMap[k]={key:k,units:0,sellers:new Set(),dates:new Set(),phs:new Set(),bus:new Set(),scs:new Set()};
+      grpMap[k].units+=s.units;
+      grpMap[k].sellers.add(s.sid);
+      s.dates.forEach(d=>grpMap[k].dates.add(d));
+      grpMap[k].phs.add(s.ph);
+      if(s.bu) grpMap[k].bus.add(s.bu);
+      if(s.sc) grpMap[k].scs.add(s.sc);
+    });
+  });
+
+  const rows=Object.values(grpMap).sort((a,b)=>b.units-a.units);
+  const lbl=groupBy==='week'?'Week':groupBy==='bu'?'BU':groupBy==='sc'?'SC':'PH';
+  const thead=document.getElementById('ek-week-thead');
+  if(thead) thead.innerHTML=`<th>${lbl}</th><th>Units</th><th>Sellers</th><th>Days</th><th>PHs</th><th>BUs</th><th>SCs</th>`;
+
+  const tbody=document.getElementById('ek-week-tbody');
+  if(!tbody) return;
+  tbody.innerHTML=rows.map(r=>`<tr>
+    <td><strong>${groupBy==='week'?'Week '+r.key:r.key}</strong></td>
+    <td>${fmtN(r.units)}</td>
+    <td>${r.sellers.size}</td>
+    <td>${r.dates.size}</td>
+    <td>${r.phs.size}</td>
+    <td>${r.bus.size}</td>
+    <td>${r.scs.size}</td>
+  </tr>`).join('');
+}
+function initAllMultiSelects(){
+  const phs=[...new Set(RAW.map(r=>r['large_ph_name']).filter(Boolean))].sort();
+  const weeks=[...new Set(RAW.map(r=>r['Week num']).filter(Boolean))].sort((a,b)=>+a-+b);
+  const dates=sortDates([...new Set(RAW.map(r=>r['dispatch_expected_date']).filter(Boolean))]);
+  initAllMultiSelectsWithData(phs,weeks,dates);
+}
+
+function initAllMultiSelectsWithData(phs, weeks, dates){
+
+  // Global filters
+  createMS('ms-week-wrap','gf-week','Week', weeks.map(w=>({v:String(w),l:'Week '+w})), 'applyGlobalFilter()');
+  createMS('ms-month-wrap','gf-month','Month',[{v:'8',l:'August'},{v:'9',l:'September'}],'applyGlobalFilter()');
+  createMS('ms-date-wrap','gf-date','Date', dates, 'applyGlobalFilter()');
+  createMS('ms-ph-wrap','gf-ph','PH', phs, 'applyGlobalFilter()');
+  createMS('ms-bu-wrap','gf-bu','BU', [...new Set(Object.values(SELLER_MAPPING).map(v=>v[1]).filter(Boolean))].sort(), 'applyGlobalFilter()');
+  createMS('ms-owner-wrap','gf-owner','Owner', ['KAM','N-KAM'], 'applyGlobalFilter()');
+  createMS('ms-breach-type-wrap','gf-btype','Breach Type',[
+    {v:'RBND Breach',l:'RBND Breach'},{v:'Reattempt Breach',l:'Reattempt Breach'},{v:'Delay dispatch',l:'Delay Dispatch'}
+  ],'applyGlobalFilter()');
+
+  // Seller tab
+  createMS('ms-sel-seg-wrap','sel-seg','Segment',[{v:'incubation',l:'Incubation'},{v:'low_drr',l:'Low DRR'},{v:'cluster',l:'Cluster'}],'renderSellers()');
+  createMS('ms-sel-sev-wrap','sel-sev','Severity',[{v:'critical',l:'Critical (≥15d)'},{v:'moderate',l:'Moderate (8-14d)'},{v:'low',l:'Low (1-7d)'}],'renderSellers()');
+  createMS('ms-sel-issue-wrap','sel-issue','Issue Type',[{v:'seller',l:'Seller Issue'},{v:'ekart',l:'Ekart Issue'}],'renderSellers()');
+
+  // PH tab
+  createMS('ms-ph-breach-wrap','ph-bfilter','Breach %',[{v:'high',l:'≥ 10%'},{v:'mid',l:'5–10%'},{v:'low',l:'< 5%'}],'renderPH()');
+
+  // Critical tab
+  createMS('ms-crit-sev-wrap','crit-sev','Severity',[{v:'high',l:'High (>30%)'},{v:'medium',l:'Medium (10-30%)'},{v:'low',l:'Low (<10%)'}],'renderCritical()');
+  createMS('ms-crit-seg-wrap','crit-seg','Segment',[{v:'incubation',l:'Incubation'},{v:'low_drr',l:'Low DRR'},{v:'cluster',l:'Cluster'}],'renderCritical()');
+
+  // Cluster tab
+  createMS('ms-cl-ph-wrap','cl-ph','PH', phs, 'renderCluster()');
+  createMS('ms-cl-breach-wrap','cl-breach','Breach',[{v:'breach',l:'Has Breach'},{v:'no-breach',l:'No Breach'}],'renderCluster()');
+  createMS('ms-cl-btype-wrap','cl-btype','Breach Type',[{v:'rbnd',l:'RBND'},{v:'reattempt',l:'Reattempt'},{v:'delay',l:'Delay'}],'renderCluster()');
+  createMS('ms-cl-drr-wrap','cl-drr','DRR',[{v:'yes',l:'Low DRR'},{v:'no',l:'Normal DRR'}],'renderCluster()');
+  createMS('ms-cl-incub-wrap','cl-incub','Incubation',[{v:'yes',l:'Incubation'},{v:'no',l:'Non-Incubation'}],'renderCluster()');
+  createMS('ms-cl-sev-wrap','cl-sev','Severity',[{v:'critical',l:'Critical'},{v:'moderate',l:'Moderate'},{v:'low',l:'Low'},{v:'none',l:'No Breach'}],'renderCluster()');
+  createMS('ms-cl-issue-wrap','cl-issue','Issue',[{v:'seller',l:'Seller Issue'},{v:'ekart',l:'Ekart Issue'}],'renderCluster()');
+
+  // Ekart tab
+  createMS('ms-ek-ph-wrap','ek-ph','PH', phs, 'renderEkart()');
+  createMS('ms-ek-week-wrap','ek-week','Week', weeks.map(w=>({v:String(w),l:'Week '+w})), 'renderEkart()');
+}
+
+// ══════════════════════════════════════════
+// AM LEVEL TABLE (Cluster Sellers)
+// ══════════════════════════════════════════
+let AM_SORT = {col:'breach_sellers', dir:-1};
+let _amData = [];
+
+function buildAMMap(clusterData){
+  const amMap = {};
+  clusterData.forEach(s=>{
+    const m = smap(s.sid);
+    const am = m[4] || '(No AM)';
+    if(!amMap[am]) amMap[am]={am, sellers:[], total_sellers:0, breach_sellers:0, total_units:0, breach_units:0, breach_days_sum:0};
+    amMap[am].sellers.push(s);
+    amMap[am].total_sellers++;
+    amMap[am].total_units += +s.total_units||0;
+    amMap[am].breach_units += +s.breach_units||0;
+    amMap[am].breach_days_sum += +s.breach_days||0;
+    if((+s.breach_units||0)>0) amMap[am].breach_sellers++;
+  });
+  return Object.values(amMap).map(a=>({
+    ...a,
+    breach_seller_pct: a.total_sellers>0?(a.breach_sellers/a.total_sellers*100):0,
+    breach_pct: a.total_units>0?(a.breach_units/a.total_units*100):0,
+    avg_breach_days: a.total_sellers>0?(a.breach_days_sum/a.total_sellers):0
+  }));
+}
+
+function renderAMTable(){
+  const clData = (_clData && _clData.length) ? _clData : Object.values(SELLER_MAP).filter(s=>s.isCluster);
+  if(!clData.length) return;
+  let amData = buildAMMap(clData);
+  const amFilter = document.getElementById('cl-am-filter')?.value || '';
+
+  // Populate dropdown once
+  const sel = document.getElementById('cl-am-filter');
+  if(sel){
+    const currentOpts = [...sel.options].map(o=>o.value).filter(Boolean);
+    if(!currentOpts.length){
+      const ams = [...new Set(amData.map(a=>a.am))].sort();
+      sel.innerHTML = '<option value="">All AMs</option>' + ams.map(a=>`<option value="${a}">${a}</option>`).join('');
+    }
+  }
+
+  // Sort
+  amData.sort((a,b)=>{
+    const av=a[AM_SORT.col], bv=b[AM_SORT.col];
+    if(typeof av==='string') return AM_SORT.dir*(av||'').localeCompare(bv||'');
+    return AM_SORT.dir*((+bv||0)-(+av||0));
+  });
+  _amData = amData;
+
+  // Summary strip
+  const display = amFilter ? amData.filter(a=>a.am===amFilter) : amData;
+  const totalBS=display.reduce((a,r)=>a+r.breach_sellers,0);
+  const totalU=display.reduce((a,r)=>a+r.total_units,0);
+  const totalBU=display.reduce((a,r)=>a+r.breach_units,0);
+  set('am-sum-count', fmt(display.length));
+  set('am-sum-bsellers', fmt(totalBS));
+  set('am-sum-units', fmtN(totalU));
+  set('am-sum-bunits', fmtN(totalBU));
+  set('am-sum-bpct', totalU>0?(totalBU/totalU*100).toFixed(1)+'%':'0%');
+
+  // AM rows
+  const tbody = document.getElementById('tbody-am');
+  if(!tbody) return;
+  tbody.innerHTML = amData.map(a=>{
+    const isSelected = amFilter && a.am===amFilter;
+    const bpctColor = a.breach_pct>=15?'var(--red)':a.breach_pct>=5?'var(--orange)':'var(--green)';
+    return `<tr style="${isSelected?'background:rgba(79,124,247,.08);font-weight:600':''}" onclick="selectAM('${a.am.replace(/\\/g,'\\\\').replace(/'/g,"\\'")}')">
+      <td style="cursor:pointer;color:var(--accent)">${a.am}</td>
+      <td>${a.total_sellers}</td>
+      <td>${a.breach_sellers}</td>
+      <td><span style="color:${bpctColor}">${a.breach_seller_pct.toFixed(1)}%</span></td>
+      <td>${fmtN(a.total_units)}</td>
+      <td>${fmtN(a.breach_units)}</td>
+      <td><span style="color:${bpctColor}">${a.breach_pct.toFixed(1)}%</span></td>
+      <td>${a.avg_breach_days.toFixed(1)}</td>
+    </tr>`;
+  }).join('');
+
+  if(amFilter){ const row=amData.find(a=>a.am===amFilter); if(row) showAMSellerDetail(row); }
+  else document.getElementById('am-seller-detail').style.display='none';
+}
+
+function selectAM(am){
+  const sel=document.getElementById('cl-am-filter');
+  if(sel){ if(sel.value===am){sel.value='';renderAMTable();return;} sel.value=am; }
+  const row=_amData.find(a=>a.am===am);
+  if(row) showAMSellerDetail(row);
+  renderAMTable();
+}
+
+function showAMSellerDetail(amRow){
+  const detail=document.getElementById('am-seller-detail');
+  const title=document.getElementById('am-seller-detail-title');
+  const tbody=document.getElementById('tbody-am-sellers');
+  if(!detail||!tbody) return;
+  detail.style.display='block';
+  title.textContent=`👤 ${amRow.am} — ${amRow.total_sellers} sellers (${amRow.breach_sellers} breaching)`;
+  const sellers=amRow.sellers.sort((a,b)=>(+b.breach_units||0)-(+a.breach_units||0));
+  tbody.innerHTML=sellers.map(s=>{
+    const m=smap(s.sid);
+    const sv=severity(+s.breach_days||0,+s.breach_pct||0);
+    return `<tr>
+      <td><code style="font-size:11px">${s.sid}</code></td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="${m[0]}">${m[0]||'—'}</td>
+      <td>${s.ph||'—'}</td><td>${m[1]||'—'}</td>
+      <td>${fmtN(+s.total_units||0)}</td>
+      <td>${fmtN(+s.breach_units||0)}</td>
+      <td>${pctBar(+s.breach_pct||0)}</td>
+      <td>${+s.breach_days||0}</td>
+      <td>${sevBadge(sv)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function sortAMTable(col){
+  if(AM_SORT.col===col) AM_SORT.dir=-AM_SORT.dir; else{AM_SORT.col=col;AM_SORT.dir=-1;}
+  document.querySelectorAll('#tbl-am th').forEach(th=>{
+    th.classList.remove('sorted-asc','sorted-desc');
+    if(th.getAttribute('onclick')===`sortAMTable('${col}')`)
+      th.classList.add(AM_SORT.dir===-1?'sorted-desc':'sorted-asc');
+  });
+  renderAMTable();
+}
+</script>
+</body>
+</html>
