@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v20261006134746 -->
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -155,7 +155,7 @@ td{padding:8px 11px;white-space:nowrap}
     <button class="btn" id="btn-export" onclick="exportJSON()" style="display:none">⬇ Export JSON</button>
     <button class="btn" id="btn-reset" onclick="resetDashboard()" style="display:none">↩ Upload New</button>
     <label class="btn primary" for="file-input" id="btn-upload-hdr" style="display:none">📂 Upload CSV</label>
-    <input type="file" id="file-input" accept="*" onchange="handleFileInput(this)">
+    <input type="file" id="file-input" accept=".csv,.json" onchange="handleFileInput(this)">
   </div>
 </header>
 
@@ -669,8 +669,7 @@ async function tryAutoLoadFromGH(){
   const repo='pickup-scorecard';
   const branch='main';
   // Use jsDelivr CDN - not blocked by GitHub Pages CSP
-  const cdnUrl=`https://cdn.jsdelivr.net/gh/${user}/${repo}@${branch}/dashboard-data.json?t=${Date.now()}`;
-  // Fallback: GitHub API (needs no CSP workaround)
+  // Use GitHub API with raw accept header - works without PAT for public repos
   const apiUrl=`https://api.github.com/repos/${user}/${repo}/contents/dashboard-data.json`;
 
   setUploadStatus('🔄 Loading data from GitHub…',40);
@@ -678,13 +677,12 @@ async function tryAutoLoadFromGH(){
   document.getElementById('upload-progress-fill').style.width='40%';
 
   try{
-    // Try jsDelivr first (fast CDN, no CSP issues)
-    let r=await fetch(cdnUrl);
+    const h={'Accept':'application/vnd.github.v3.raw','Cache-Control':'no-cache'};
+    if(GH.pat) h['Authorization']='token '+GH.pat;
+    let r=await fetch(apiUrl+'?t='+Date.now(),{headers:h});
     if(!r.ok){
-      // Fallback to GitHub API with Accept header to get raw content
-      const h={'Accept':'application/vnd.github.v3.raw'};
-      if(GH.pat) h['Authorization']='token '+GH.pat;
-      r=await fetch(apiUrl,{headers:h});
+      // Fallback: raw URL
+      r=await fetch(`https://raw.githubusercontent.com/${user}/${repo}/${branch}/dashboard-data.json?t=${Date.now()}`);
     }
     if(!r.ok){
       setUploadStatus(`❌ Could not load data (HTTP ${r.status}) — upload your CSV`,100);
@@ -730,9 +728,9 @@ function handleFileInput(input){
 function processFile(f){
   if(f.name.endsWith('.json')){ loadJSON(f); return; }
   // Accept any CSV file regardless of name
-  // Accept any file - try JSON first, then CSV
-  if(f.name.toLowerCase().endsWith('.json')){ loadJSON(f); return; }
-  // Try to parse as CSV regardless of extension
+  if(!f.name.toLowerCase().endsWith('.csv')){
+    showToast('Please upload a CSV or JSON file','err'); return;
+  }
   setUploadStatus('Reading CSV…',20);
   Papa.parse(f,{
     header:false, skipEmptyLines:true,
