@@ -1586,7 +1586,7 @@ function downloadCSV(type){
   } else if(type==='am'){
     hdrs=['am','total_sellers','breach_sellers','breach_seller_pct','total_units','breach_units','breach_pct','avg_breach_days'];
     rows=(_amData||[]).map(a=>[a.am,a.total_sellers,a.breach_sellers,a.breach_seller_pct.toFixed(1),a.total_units,a.breach_units,a.breach_pct.toFixed(1),a.avg_breach_days.toFixed(1)]);
-  } else if(type==='cluster'){
+  }
     hdrs=['seller_id','ph','total_units','breach_units','breach_pct','breach_days','rbnd_days','reattempt_days','delay_days','low_drr','incubation','issue_type','severity'];
     rows=_clData.map(s=>[s.sid,s.ph,s.total_units,s.breach_units,s.breach_pct.toFixed(2),s.breach_days,s.rbnd_days,s.reattempt_days,s.delay_days,s.lowDRR?'Yes':'',s.incubation?'Yes':'',s.issueType,severity(s.breach_days,s.breach_pct)]);
   }
