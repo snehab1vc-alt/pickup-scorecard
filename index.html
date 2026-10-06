@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v20261006134302 -->
+<!DOCTYPE html><!-- v20261006134746 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -155,7 +155,7 @@ td{padding:8px 11px;white-space:nowrap}
     <button class="btn" id="btn-export" onclick="exportJSON()" style="display:none">⬇ Export JSON</button>
     <button class="btn" id="btn-reset" onclick="resetDashboard()" style="display:none">↩ Upload New</button>
     <label class="btn primary" for="file-input" id="btn-upload-hdr" style="display:none">📂 Upload CSV</label>
-    <input type="file" id="file-input" accept=".csv,.json" onchange="handleFileInput(this)">
+    <input type="file" id="file-input" accept="*" onchange="handleFileInput(this)">
   </div>
 </header>
 
@@ -730,9 +730,9 @@ function handleFileInput(input){
 function processFile(f){
   if(f.name.endsWith('.json')){ loadJSON(f); return; }
   // Accept any CSV file regardless of name
-  if(!f.name.toLowerCase().endsWith('.csv')){
-    showToast('Please upload a CSV or JSON file','err'); return;
-  }
+  // Accept any file - try JSON first, then CSV
+  if(f.name.toLowerCase().endsWith('.json')){ loadJSON(f); return; }
+  // Try to parse as CSV regardless of extension
   setUploadStatus('Reading CSV…',20);
   Papa.parse(f,{
     header:false, skipEmptyLines:true,
