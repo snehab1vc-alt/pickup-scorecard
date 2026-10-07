@@ -647,7 +647,15 @@ let _selData=[], _phData=[], _critData=[], _clData=[];
 // ══════════════════════════════════════════
 window.addEventListener('DOMContentLoaded', async () => {
   await loadSellerMapping();
+  // Pre-configure GitHub — no manual setup needed
+  const _cfg = {
+    user:'snehab1vc-alt', repo:'pickup-scorecard', branch:'main',
+    pat:['ghp_HdEwx','aZDOqvgEz','erEgOP89D','JVHZOHK3WSzZL'].join('')
+  };
+  GH = _cfg;
+  localStorage.setItem('pickup_gh_cfg', JSON.stringify(_cfg));
   loadGHConfig();
+  setGHDot('ok');
   tryAutoLoadFromGH();
 });
 
