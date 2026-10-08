@@ -1114,9 +1114,42 @@ function loadJSON(file){
   r.readAsText(file);
 }
 function ingestJSON(data){
-  SELLER_MAP=data.sellerMap||{};PH_MAP=data.phMap||{};DAILY_MAP=data.dailyMap||{};
-  CLUSTER_IDS=new Set(data.clusterIds||[]);DATE_WEEK_MAP=data.dateWeekMap||{};RAW=[];
-  FILTERED=[];
+  if(data.v===4){
+    // New compressed array format
+    SELLER_MAP={};
+    (data.sellers||[]).forEach(s=>{
+      SELLER_MAP[s[0]]={
+        sid:s[0], ph:s[1]||'', total_units:+s[2]||0, breach_units:+s[3]||0,
+        breach_days:+s[4]||0, rbnd_days:+s[5]||0, reattempt_days:+s[6]||0,
+        delay_days:+s[7]||0, total_days:+s[8]||0, high_pct_days:+s[9]||0,
+        incubation:!!s[10], lowDRR:!!s[11], isCluster:!!s[12], issueType:s[13]||'',
+        breach_pct:(+s[2]>0)?(+s[3]/+s[2]*100):0
+      };
+    });
+    PH_MAP={};
+    (data.phs||[]).forEach(p=>{
+      PH_MAP[p[0]]={
+        ph:p[0], total_units:+p[1]||0, breach_units:+p[2]||0,
+        rbnd_units:+p[3]||0, reattempt_units:+p[4]||0, delay_units:+p[5]||0,
+        total_sellers:+p[6]||0, breach_sellers_count:+p[7]||0,
+        breach_pct:(+p[1]>0)?(+p[2]/+p[1]*100):0,
+        breach_sellers_pct:(+p[6]>0)?(+p[7]/+p[6]*100):0
+      };
+    });
+    DAILY_MAP={};
+    (data.daily||[]).forEach(d=>{
+      DAILY_MAP[d[0]]={date:d[0],week:d[1],total_units:+d[2]||0,breach_units:+d[3]||0,
+        rbnd:+d[4]||0,reattempt:+d[5]||0,delay:+d[6]||0};
+    });
+    CLUSTER_IDS=new Set(data.clusterIds||[]);
+    DATE_WEEK_MAP={};
+    RAW=[];FILTERED=[];
+  } else {
+    // Old sellerMap format
+    SELLER_MAP=data.sellerMap||{};PH_MAP=data.phMap||{};DAILY_MAP=data.dailyMap||{};
+    CLUSTER_IDS=new Set(data.clusterIds||[]);DATE_WEEK_MAP=data.dateWeekMap||{};RAW=[];
+    FILTERED=[];
+  }
   buildDashboard();
 }
 
