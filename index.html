@@ -690,7 +690,9 @@ function aggregate(){
 // ══════════════════════════════════════════
 function buildDashboard(){
   FILTERED=[...RAW];
-  aggregate();
+  // Only aggregate from raw CSV rows. When data is pre-aggregated (ingestJSON),
+  // RAW is empty and SELLER_MAP/PH_MAP/DAILY_MAP are already populated.
+  if(RAW.length>0) aggregate();
   setUploadStatus('',100);
   document.getElementById('upload-screen').style.display='none';
   document.getElementById('dashboard').style.display='block';
