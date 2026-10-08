@@ -413,10 +413,21 @@ td{padding:8px 11px;white-space:nowrap}
         <div class="section-head"><span class="row-count" id="cl-count"></span></div>
         <div class="table-wrap">
           <table><thead><tr>
-            <th onclick="sortCol('sel','sid',this)" style="cursor:pointer">Seller ID ↕</th><th onclick="sortCol('sel','ph',this)" style="cursor:pointer">PH ↕</th><th onclick="sortCol('sel','total_units',this)" style="cursor:pointer">Total Units ↕</th><th onclick="sortCol('sel','breach_units',this)" style="cursor:pointer">Breach Units ↕</th>
-            <th>Breach %</th><th>Breach Days</th><th>RBND Days</th><th>Reattempt Days</th>
-            <th>Delay Days</th><th>Freq >10%</th><th>Low DRR</th><th>Incubation</th>
-            <th>Issue Type</th><th>Severity</th>
+            <th onclick="sortCol('cluster','sid',this)" style="cursor:pointer">Seller ID ↕</th>
+            <th onclick="sortCol('cluster','name',this)" style="cursor:pointer">Name ↕</th>
+            <th onclick="sortCol('cluster','bu',this)" style="cursor:pointer">BU ↕</th>
+            <th onclick="sortCol('cluster','sc',this)" style="cursor:pointer">SC ↕</th>
+            <th onclick="sortCol('cluster','owner',this)" style="cursor:pointer">Owner ↕</th>
+            <th onclick="sortCol('cluster','am',this)" style="cursor:pointer">AM ↕</th>
+            <th onclick="sortCol('cluster','ph',this)" style="cursor:pointer">PH ↕</th>
+            <th onclick="sortCol('cluster','total_units',this)" style="cursor:pointer">Total Units ↕</th>
+            <th onclick="sortCol('cluster','breach_units',this)" style="cursor:pointer">Breach Units ↕</th>
+            <th onclick="sortCol('cluster','breach_pct',this)" style="cursor:pointer">Breach % ↕</th>
+            <th onclick="sortCol('cluster','breach_days',this)" style="cursor:pointer">Breach Days ↕</th>
+            <th onclick="sortCol('cluster','rbnd_days',this)" style="cursor:pointer">RBND ↕</th>
+            <th onclick="sortCol('cluster','reattempt_days',this)" style="cursor:pointer">Reattempt ↕</th>
+            <th onclick="sortCol('cluster','delay_days',this)" style="cursor:pointer">Delay ↕</th>
+            <th>Low DRR</th><th>Incubation</th><th>Severity</th>
           </tr></thead><tbody id="tbody-cluster"></tbody></table>
         </div>
       </div>
@@ -815,7 +826,7 @@ function renderSellers(){
   tbody.innerHTML=data.slice(0,500).map(s=>{
     const sv=severity(s.breach_days,s.breach_pct);
     const m=smap(s.sid);
-    const name=m[0]||'—',bu=m[1]||'—',sc=m[2]||'—',owner=m[3]||'—',am=m[4]||'—',email=m[5]||'';
+    const name=m[0]||'Unmanaged',bu=m[1]||'Unmanaged',sc=m[2]||'Unmanaged',owner=m[3]||'Unmanaged',am=m[4]||'Unmanaged',email=m[5]||'';
     const emailLink=email?`<a href="mailto:${email}" style="color:var(--accent);text-decoration:none" title="${email}">✉</a>`:'';
     return `<tr onclick="this.classList.toggle('row-expanded')">
       <td><code style="font-size:10px">${s.sid}</code></td>
@@ -995,7 +1006,7 @@ function renderCluster(){
   if(sev==='none') data=data.filter(s=>s.breach_days===0);
   if(issue==='seller') data=data.filter(s=>s.issueType.includes('seller'));
   if(issue==='ekart') data=data.filter(s=>s.issueType.includes('ekart'));
-  data.sort((a,b)=>b[sortBy]-a[sortBy]);
+  applySort(data,'cluster','breach_units');
 
   // Summary
   const total=data.length;
@@ -1019,13 +1030,18 @@ function renderCluster(){
   set('cl-count',`${total} cluster sellers`);
   _clData=data;
   const tbody=document.getElementById('tbody-cluster');
-  if(!data.length){tbody.innerHTML=`<tr><td colspan="14" class="empty">No cluster sellers match</td></tr>`;return;}
+  if(!data.length){tbody.innerHTML=`<tr><td colspan="17" class="empty">No cluster sellers match</td></tr>`;return;}
   tbody.innerHTML=data.map(s=>{
     const sv=severity(s.breach_days,s.breach_pct);
-    return `<tr><td><code style="font-size:11px">${s.sid}</code></td><td>${s.ph}</td>
+    const m=smap(s.sid);
+    const name=m[0]||'Unmanaged',bu2=m[1]||'Unmanaged',sc=m[2]||'Unmanaged',owner=m[3]||'Unmanaged',am=m[4]||'Unmanaged',email=m[5]||'';
+    const emailLink=email?`<a href="mailto:${email}" style="color:var(--accent)" title="${email}">✉</a>`:'';
+    return `<tr><td><code style="font-size:10px">${s.sid}</code></td>
+      <td style="max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${name}">${name}</td>
+      <td>${bu2}</td><td>${sc}</td><td>${owner}</td><td>${am} ${emailLink}</td>
+      <td>${s.ph}</td>
       <td>${fmtN(s.total_units)}</td><td>${fmtN(s.breach_units)}</td><td>${pctBar(s.breach_pct)}</td>
       <td>${s.breach_days}</td><td>${s.rbnd_days}</td><td>${s.reattempt_days}</td><td>${s.delay_days}</td>
-      <td>${s.high_pct_days}</td>
       <td>${s.lowDRR?'<span class="badge orange">Low DRR</span>':'—'}</td>
       <td>${s.incubation?'<span class="badge purple">Incubation</span>':'—'}</td>
       <td>${s.issueType?s.issueType:'—'}</td>
@@ -1207,7 +1223,7 @@ function sortCol(tab, col, th) {
   });
   th.textContent = th.textContent.replace(' ↕','') + (SORT_STATE[tab].dir === -1 ? ' ▼' : ' ▲');
   if(tab==='sellers') renderSellers();
-  else if(tab==='ph') renderPH();
+  else if(tab==='ph'||tab==='sel') renderPH();
   else if(tab==='critical') renderCritical();
   else if(tab==='cluster') renderCluster();
 }
