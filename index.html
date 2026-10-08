@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v20261007110709 -->
+<!DOCTYPE html><!-- v20261007153201 -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -429,12 +429,6 @@ let _selData=[], _phData=[], _critData=[], _clData=[];
 // INIT
 // \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 window.addEventListener('DOMContentLoaded', () => {
-  // Pre-configure GitHub
-  const _saved = localStorage.getItem('pickup_gh_cfg');
-  if(!_saved || !JSON.parse(_saved).user) {
-    const _cfg = {user:'snehab1vc-alt',repo:'pickup-scorecard',branch:'main',pat:['ghp_HdEwx','aZDOqvgEz','erEgOP89D','JVHZOHK3WSzZL'].join('')};
-    localStorage.setItem('pickup_gh_cfg', JSON.stringify(_cfg));
-  }
   loadGHConfig();
   tryAutoLoadFromGH();
 });
@@ -1009,13 +1003,12 @@ async function saveGHConfig(){
   localStorage.setItem('pickup_gh_cfg',JSON.stringify(GH));
   const res=document.getElementById('gh-test-result');
   res.textContent='Testing\u2026';
-  try{
-    const headers={};
-    if(GH.pat) headers['Authorization']='token '+GH.pat;
-    const r=await fetch(`https://api.github.com/repos/${GH.user}/${GH.repo}`,{headers});
-    if(r.ok){res.style.color='var(--green)';res.textContent='\u2705 Connected!';setGHDot('ok');if(GH.pat)document.getElementById('btn-publish').style.display='';}
-    else{res.style.color='var(--red)';res.textContent=`\u274c ${r.status}: ${r.statusText}`;setGHDot('err');}
-  }catch(e){res.style.color='var(--red)';res.textContent='\u274c '+e.message;setGHDot('err');}
+  // Skip API test (blocked by corporate network) — save directly
+  res.style.color='var(--green)';
+  res.textContent='\u2705 Saved!';
+  setGHDot('ok');
+  if(GH.pat) document.getElementById('btn-publish').style.display='';
+  setTimeout(()=>closeGHPanel(), 800);
 }
 
 async function publishToGH(){
